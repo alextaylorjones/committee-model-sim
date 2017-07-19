@@ -1,6 +1,7 @@
 #!/usr/bin/python
 
 import networkx as nx
+import collections
 import math
 import numpy as np
 import random as rand
@@ -100,27 +101,24 @@ def construct_awareness_from_contact_graph(G):
         
     return H
         
-#Calculate the expected number of neighbors of S in nodeSet, not including S itself
-def get_exp_coverage(G,nodeSet,S):
+#Calculate the expected number of neighbors of S in V(G), not including S itself
+def get_exp_coverage(G,S):
     #Coverage probabilities of
     #print "Finding coverage of S = ",S
-    covg = {}
+
+    covg = [0.0 for n in G.nodes()]
     
     for n in S:
         #Get neighbors
-        for b in G[n]:
+        for b in G.neighbors(n):
             #If not in nodeSet or in S, ignore
-            if (b not in nodeSet or b in S):
+            if (b in S):
                 continue
             #If in nodeSet and already covered by some node, update coverage
-            elif (b in covg.keys()): 
-                #Update coverage of b
-                covg[b] = 1 - (1-covg[b])*(1-G[n][b]['weight'])
-            else:
-                covg[b] = G[n][b]['weight']
+            covg[b] = 1 - (1-covg[b])*(1-G[n][b]['weight'])
                 
     #return the sum of all of the coverage weights
-    return sum([covg[x] for x in covg.keys()])
+    return sum(covg)
     
 # Find approximation max coverage set using k-greedy method, with t total nodes in solution
 def greedy_expected_max_coverage_set(G,t,k):
@@ -144,7 +142,7 @@ def greedy_expected_max_coverage_set(G,t,k):
         
         #Get value of current (partial solution)
         if (len(soln) > 0):
-            current_covg = get_exp_coverage(G,G.nodes(),soln)
+            current_covg = get_exp_coverage(G,soln)
         else:
             current_covg = 0.0
            
@@ -155,7 +153,7 @@ def greedy_expected_max_coverage_set(G,t,k):
         #print "\n Selecting next ", sub_k, "nodes from set ", remaining_nodes
         for nodeset in comb(remaining_nodes,sub_k): #For all k combinations of unselected nodes
             #calculate expected coverage with the addition of nodeset to the current solution
-            sym_diff = get_exp_coverage(G,G.nodes(),soln.union(nodeset))
+            sym_diff = get_exp_coverage(G,soln.union(nodeset))
             #print "Coverage of ", soln.union(nodeset), "is ", sym_diff
             if (sym_diff > max_sym_diff):
                 #print "Using ", nodeset, "as current best"
@@ -210,12 +208,13 @@ def get_distribution_coverage_time(G_init,k,alpha,closure_param,trials=100,max_t
    
     committee_coverage = []
     max_committee_coverage = []
- 
+    committees = []
     graphs = []
     
     for t in range(trials):
         G = G_init.copy()
         graphs.append([])
+        committees.append([])
         committee_coverage.append( [])
         max_committee_coverage.append([])
 
@@ -226,6 +225,7 @@ def get_distribution_coverage_time(G_init,k,alpha,closure_param,trials=100,max_t
             committee,covg = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),k,1)
             committee_coverage[-1].append(covg)
             max_committee_coverage[-1].append(covg)
+            committees[-1].append(committee)
 
 
             print "T=0"
@@ -260,6 +260,7 @@ def get_distribution_coverage_time(G_init,k,alpha,closure_param,trials=100,max_t
                 tries += 1
              
                 committee,covg = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),k,1)
+                committees[-1].append(committee)
                 committee_coverage[-1].append(covg)
                 max_committee_coverage[-1].append(covg)
 
@@ -273,8 +274,10 @@ def get_distribution_coverage_time(G_init,k,alpha,closure_param,trials=100,max_t
             #ensure uniqueness
             while (len(committee) != len(set(committee))):
                  committee = np.random.choice(G.nodes(),k)
+            
+            committees[-1].append(committee)
                     
-            covg = get_exp_coverage(G,G.nodes(),committee)
+            covg = get_exp_coverage(G,committee)
 
 
             committee_coverage[-1].append(covg)
@@ -332,9 +335,10 @@ def get_distribution_coverage_time(G_init,k,alpha,closure_param,trials=100,max_t
                 while (len(committee) != len(set(committee))):
                      committee = np.random.choice(G.nodes(),k)
 
-                covg = get_exp_coverage(G,G.nodes(),committee)
-                committee_coverage[-1].append(covg)
+                committees[-1].append(committee)
 
+                covg = get_exp_coverage(G,committee)
+                committee_coverage[-1].append(covg)
 
 
         
@@ -343,7 +347,7 @@ def get_distribution_coverage_time(G_init,k,alpha,closure_param,trials=100,max_t
         #print "Finished at time ", tries, " with committee", committee, " with coverage ", covg
         time_dist.append(tries)
         
-    return time_dist,graphs,committee_coverage,max_committee_coverage
+    return time_dist,graphs,committees,committee_coverage,max_committee_coverage
     
 #Load data
 
@@ -498,11 +502,11 @@ def list_local_bridges(G):
 #Find closure time on real graphs
 
 
-COMMITTEE_SZ = 8
+COMMITTEE_SZ = 10
 NUM_COPIES = 5
-COVERAGE_MIN = 0.999
-CLOSURE_PARAM = 0.04
-trials = 10
+COVERAGE_MIN = 0.9999
+CLOSURE_PARAM = 0.08
+trials = 3
 repeats = 1
 
 
@@ -511,16 +515,26 @@ G_list = single_contact_networks_list
 
 
 
+"""
 print "Starting simulation"
 print "Coverage minimum fraction %.2f, committee size %i and closure prob %.2f" % (COVERAGE_MIN,COMMITTEE_SZ,CLOSURE_PARAM)
+
+
+
+plt.rcParams.update({'font.size': 14})
+
+
 
 rand_results = {}
 greedy_results = {}
 
 for i,graph_desc in enumerate(G_list):
-   
+  
+    if (i==0):
+        continue 
     print graph_desc
     G,name = graph_desc
+    G = nx.convert_node_labels_to_integers(G)
     data_greedy = []
     data_rand = []
     
@@ -528,13 +542,13 @@ for i,graph_desc in enumerate(G_list):
     for c in range(repeats):
         print "Using greedy method"
 
-        t,graphs,covg,max_covg = get_distribution_coverage_time(G,COMMITTEE_SZ,COVERAGE_MIN,CLOSURE_PARAM,trials,max_tries=int(0.75*len(G.nodes()))/COMMITTEE_SZ,alg="greedy",draw_freq=0,show_ecc=False)
+        t,graphs,committee,covg,max_covg = get_distribution_coverage_time(G,COMMITTEE_SZ,COVERAGE_MIN,CLOSURE_PARAM,trials,max_tries=int(2.75*len(G.nodes()))/COMMITTEE_SZ,alg="greedy",draw_freq=0,show_ecc=False)
 
-        data_greedy.append((t,graphs,covg,max_covg))
+        data_greedy.append((t,graphs,covg,max_covg,committee))
         #data_greedy.append(tuple(t,graphs) for t,graphs in get_distribution_coverage_time(G,COMMITTEE_SZ,COVERAGE_MIN,CLOSURE_PARAM,trials,max_tries=N/COMMITTEE_SZ,alg="greedy",draw_freq=1))
         print "Using random method"
-        t,graphs,covg,max_covg =  get_distribution_coverage_time(G,COMMITTEE_SZ,COVERAGE_MIN,CLOSURE_PARAM,trials,max_tries=int(0.75*len(G.nodes()))/COMMITTEE_SZ,alg="random",draw_freq=0,show_ecc=False)
-        data_rand.append((t,graphs,covg,max_covg))
+        t,graphs,committee,covg,max_covg =  get_distribution_coverage_time(G,COMMITTEE_SZ,COVERAGE_MIN,CLOSURE_PARAM,trials,max_tries=int(2.75*len(G.nodes()))/COMMITTEE_SZ,alg="random",draw_freq=0,show_ecc=False)
+        data_rand.append((t,graphs,covg,max_covg,committee))
 
     #print "Data Greedy = " ,data_greedy
     
@@ -552,6 +566,7 @@ for i,graph_desc in enumerate(G_list):
     rand_results[name]['max_coverage'] = [] 
     rand_results[name]['clustering'] = [] 
     rand_results[name]['local_bridges'] = [] 
+    rand_results[name]['committee'] = [] 
 
     greedy_results[name]['diameter'] = [] 
     greedy_results[name]['num_edges'] = [] 
@@ -559,6 +574,7 @@ for i,graph_desc in enumerate(G_list):
     greedy_results[name]['max_coverage'] = [] 
     greedy_results[name]['clustering'] = [] 
     greedy_results[name]['local_bridges'] = [] 
+    greedy_results[name]['committee'] = [] 
 
  
     #f = plt.figure("%s : greedy" % name)
@@ -575,6 +591,7 @@ for i,graph_desc in enumerate(G_list):
             edges = []
             clustering = []
             local_bridges = []
+            degrees = []
             #print "Checking graphs ", trial, "for trial" ,graph_trials
             for graph in trial:
                 #print "Graph edges",len(graph.edges())
@@ -582,7 +599,7 @@ for i,graph_desc in enumerate(G_list):
                 edges.append(len(graph.edges()))
                 clustering.append(nx.average_clustering(graph))
                 local_bridges.append(len(list_local_bridges(graph))/2)
-    
+                    
             greedy_results[name]['diameter'].append(diameter)
             greedy_results[name]['num_edges'].append(edges)
             greedy_results[name]['clustering'].append(clustering)
@@ -644,30 +661,23 @@ for i,graph_desc in enumerate(G_list):
     plot_comp_results("%s - k=%i - closure=%.2f" %(name,COMMITTEE_SZ,CLOSURE_PARAM),greedy_results[name]['max_coverage'][0],'greedy',rand_results[name]['max_coverage'][0],'random','Est. Max Committee Coverage')
     plot_comp_results("%s - k=%i - closure=%.2f" %(name,COMMITTEE_SZ,CLOSURE_PARAM),greedy_results[name]['local_bridges'],'greedy',rand_results[name]['local_bridges'],'random','Local Bridges')
 
-    """
-    #Plot convergence statistics
-    # Two subplots, the axes array is 1-d
-   
-    plt.figure()
-
-    binwidth=1
-    #print data
-    hist_greedy,bins_greedy = np.histogram(time_dist_greedy,bins=range(min(time_dist_greedy), max(time_dist_greedy) + binwidth+1, binwidth))                                 
-    width_greedy = 0.5 * (bins_greedy[1] - bins_greedy[0])
-    center_greedy = (bins_greedy[:-1] + bins_greedy[1:]) / 2
-    
-    plt.bar(center_greedy, hist_greedy, align='center', width=width_greedy)
-    #axarr[0].set_title("Distribution of Number of Greedily Selected %i-Committee Formations to reach %.2f coverage over %i trials \n Graph is %s" %(COMMITTEE_SZ,COVERAGE_MIN,trials,name))
-    
-    hist_rand,bins_rand = np.histogram(time_dist_rand,bins=range(min(time_dist_rand), max(time_dist_rand) + binwidth+1, binwidth))                                 
-    width_rand = 0.5 * (bins_rand[1] - bins_rand[0])
-    center_rand = (bins_rand[:-1] + bins_rand[1:]) / 2
-    
-    plt.bar(center_rand, hist_rand, align='center', width=width_rand)
-    plt.set_title("Distribution of Number of Randomly Selected %i-Committee Formations to reach %.2f coverage over %i trials \n Graph is %s" %(COMMITTEE_SZ,COVERAGE_MIN,trials,name))
-    
-    plt.show()
-
-    """
     break
+"""
+
+if __name__ == "__main__":
+    
+    # Plot degree distributions
+    trials = 1
+    iterations = 10
+    f, axarr = plt.subplots(int(math.sqrt(iterations)), int(math.sqrt(iterations)))
+
+    for t in range(trials):
+        for i in range(iterations):
+            degree_sequence=sorted([d for n,d in G.degree()], reverse=True) # degree sequence
+            #print "Degree sequence", degree_sequence
+            degreeCount=collections.Counter(degree_sequence)
+            deg, cnt = zip(*degreeCount.items())        
+
+
+
 plt.show()
