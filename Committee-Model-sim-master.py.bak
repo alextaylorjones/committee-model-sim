@@ -508,16 +508,16 @@ def list_local_bridges(G):
 G_list = single_contact_networks_list
 
 repeats = 1
-trials = 10
+trials = 20
 iterations = 30
 frequency = 5
 COMMITTEE_SZ = 6
 COVERAGE_MIN = 0.9999
-CLOSURE_PARAM = 0.08
+CLOSURE_PARAM = 0.05
 
 
 print("Starting simulation")
-print(("Coverage minimum fraction %.2f, committee size %i and closure prob %.2f" % (COVERAGE_MIN,COMMITTEE_SZ,CLOSURE_PARAM)))
+print("Coverage minimum fraction %.2f, committee size %i and closure prob %.2f" % (COVERAGE_MIN,COMMITTEE_SZ,CLOSURE_PARAM))
 
 plt.rcParams.update({'font.size': 14})
 
@@ -527,11 +527,10 @@ rand_results = {}
 greedy_results = {}
 
 for z,graph_desc in enumerate(G_list):
-
-    if (z not in [5]):
+    if (z < 4):
         continue
+    print "G has", len(G.nodes()), " nodes"
     G,name = graph_desc
-    print("G has", len(G.nodes()), " nodes")
     G = nx.convert_node_labels_to_integers(G)
     data_greedy = []
     data_rand = []
@@ -615,7 +614,7 @@ for z,graph_desc in enumerate(G_list):
                     G.remove_node(c)
                 G = nx.convert_node_labels_to_integers(G)
                 _,covg = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),COMMITTEE_SZ,1)
-                print(("Adding coverage value",covg))
+                print("Adding coverage value",covg)
                 max_second_covg.append(covg)
                 
     
@@ -647,7 +646,7 @@ for z,graph_desc in enumerate(G_list):
             greedy_results[name]['committee'].append(committee_remain)
             
      
-    print(("Times recorded for greedy are ",time_dist_greedy))
+    print("Times recorded for greedy are ",time_dist_greedy)
     
     #plt.show()
     
@@ -708,7 +707,7 @@ for z,graph_desc in enumerate(G_list):
                 
             rand_results[name]['committee'].append(committee_remain)
 
-    print(("Times recorded for random are ",time_dist_rand))
+    print("Times recorded for random are ",time_dist_rand)
     
     #plt.legend(handles=[line_greedy, line_rand])
     #plt.show()
@@ -729,6 +728,7 @@ for z,graph_desc in enumerate(G_list):
 
     plot_comp_results("%s - k=%i - closure=%.2f" %(name,COMMITTEE_SZ,CLOSURE_PARAM),greedy_results[name]['max_second_coverage'],'(greedy) second',greedy_results[name]['max_coverage'][0],'(greedy) first','(Greedy) Max vs Alt Coverage')
     plot_comp_results("%s - k=%i - closure=%.2f" %(name,COMMITTEE_SZ,CLOSURE_PARAM),rand_results[name]['max_second_coverage'],'(rand) second',rand_results[name]['max_coverage'][0],'(rand) first','(Rand) Max vs Alt Coverage')
+    break
 plt.show()
 
 """
