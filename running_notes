@@ -1,0 +1,13 @@
+Q - Are committees chosen robust under closure randomness?
+
+What are the clustering patterns under greedy selection verses random selection?
+
+
+Plot diameter under convergence
+
+>found though error in random convergence calulcator - should use best committee as measurement of coverage quality possible, not randomly chosen committee
+
+
+>greedy method may quickly convergence over few instances but lack foresight
+
+?think through

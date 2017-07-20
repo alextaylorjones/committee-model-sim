@@ -173,7 +173,7 @@ def greedy_expected_max_coverage_set(G,t,k):
 ## Close all triads in committee
 def committee_closure_augmentation(G,committee,closure_threshold):
     H = G.copy()
-    
+    #print "Closing committee", committee 
     for x,y in comb(committee,2):
         #add committee-committee edge
         H.add_edge(x,y,weight=1.0)
@@ -502,13 +502,6 @@ def list_local_bridges(G):
 #Find closure time on real graphs
 
 
-COMMITTEE_SZ = 10
-NUM_COPIES = 5
-COVERAGE_MIN = 0.9999
-CLOSURE_PARAM = 0.08
-trials = 3
-repeats = 1
-
 
 #G_list = combined_contact_networks_list
 G_list = single_contact_networks_list
@@ -662,22 +655,100 @@ for i,graph_desc in enumerate(G_list):
     plot_comp_results("%s - k=%i - closure=%.2f" %(name,COMMITTEE_SZ,CLOSURE_PARAM),greedy_results[name]['local_bridges'],'greedy',rand_results[name]['local_bridges'],'random','Local Bridges')
 
     break
+
+plt.show()
 """
 
 if __name__ == "__main__":
     
     # Plot degree distributions
-    trials = 1
-    iterations = 10
-    f, axarr = plt.subplots(int(math.sqrt(iterations)), int(math.sqrt(iterations)))
+    trials = 5
+    iterations = 30
+    frequency = 5
+    COMMITTEE_SZ = 8
+    COVERAGE_MIN = 0.9999
+    CLOSURE_PARAM = 0.1
 
-    for t in range(trials):
+    h = 2
+    w = int(math.ceil(iterations/2/float(frequency)))+1
+
+    for graph_desc in G_list:
+
+        G,name = graph_desc
+        G = nx.convert_node_labels_to_integers(G)
+        H = G.copy()
+        G_r = G.copy()
+
+        print "\nShowing ",name
+
+        degrees = [[] for _ in range(iterations)]
+        degrees_r = [[] for _ in range(iterations)]
+
+        for t in range(trials):
+            G = H.copy()
+            G_r = H.copy()
+
+            for i in range(iterations):
+                #Get Greedy Committee and Update graph
+                committee,_ = greedy_expected_max_coverage_set(G,COMMITTEE_SZ,1)
+                G = committee_closure_augmentation(G,committee,CLOSURE_PARAM)
+
+                #Get random committee and update graph
+                committee_r = np.random.choice(G_r.nodes(),COMMITTEE_SZ)
+            
+                #ensure uniqueness
+                while (len(committee_r) != len(set(committee_r))):
+                    committee_r = np.random.choice(G_r.nodes(),COMMITTEE_SZ)
+                # update graph
+                G_r = committee_closure_augmentation(G_r,committee_r,CLOSURE_PARAM)
+
+                degrees[i] = degrees[i] + G.degree().values()
+                degrees_r[i] = degrees_r[i] + G_r.degree().values()
+       
+
+
+        f, axarr = plt.subplots(w, h)
+        f_r, axarr_r = plt.subplots(w, h)
+        f.subplots_adjust(hspace=0.3)
+        f_r.subplots_adjust(hspace=0.3)
+
+        x = 0
+        y = 0
+
         for i in range(iterations):
-            degree_sequence=sorted([d for n,d in G.degree()], reverse=True) # degree sequence
-            #print "Degree sequence", degree_sequence
-            degreeCount=collections.Counter(degree_sequence)
-            deg, cnt = zip(*degreeCount.items())        
+            if (i % frequency == 0):
+                #Greedy
+                degree_sequence=sorted(degrees[i], reverse=True) # degree sequence
+                degreeCount=collections.Counter(degree_sequence)
+                deg, cnt = zip(*degreeCount.items())        
+
+                axarr[x,y].bar(deg, cnt, width=0.80, color='g')
+                axarr[x,y].set_xlim([0,len(G.nodes())])
+                #axarr[x,y].set_ylim([0,len(G.nodes())])
+                if (x==0 and y==0):
+                    axarr[x,y].set_title("Greedy k=%i,p=%.2f %s - %i"%(COMMITTEE_SZ,CLOSURE_PARAM,name,i))
+                else:
+                    axarr[x,y].set_title("%i"%i)
+
+                #random
+                degree_sequence_r=sorted(degrees_r[i], reverse=True) # degree sequence
+                degreeCount_r=collections.Counter(degree_sequence_r)
+                deg_r, cnt_r = zip(*degreeCount_r.items())        
+                axarr_r[x,y].bar(deg_r, cnt_r, width=0.80, color='r')
+                axarr_r[x,y].set_xlim([0,len(G.nodes())])
+                #axarr_r[x,y].set_xlim([0,len(G.nodes())])
+                if (x==0 and y==0):
+                    axarr_r[x,y].set_title("Rand k=%i,p=%.2f %s - %i"%(COMMITTEE_SZ,CLOSURE_PARAM,name,i))
+                else:
+                    axarr_r[x,y].set_title("%i"%i)
+
+                y += 1 
+                if (y >= h):
+                    y=0
+                    x += 1
+    print "Done"
+    #Show plot from one trial
+    plt.show()
+          
 
 
-
-plt.show()
