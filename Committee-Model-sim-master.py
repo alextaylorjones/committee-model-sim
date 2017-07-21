@@ -1,5 +1,4 @@
 #!/usr/bin/python
-
 import networkx as nx
 import collections
 import math
@@ -9,7 +8,7 @@ import copy
 import matplotlib.pyplot as plt
 from itertools import combinations as comb
 #constants
-
+SEED=4
 
 #**** Graph building helper functions ****#
 
@@ -74,15 +73,15 @@ def construct_awareness_from_contact_graph(G):
         y = pair[1]
        
         metric = 0.0
-        if (y in list(G[x].keys())):#if y a neighor of x (and visa versa)
+        if (y in G[x]):#if y a neighor of x (and visa versa)
             metric = 0.5
             
         #JS Metric
         xNbr = set(G[x])
         yNbr = set(G[y])
         
-        #if they have no mutual neighbors
-        if (len(xNbr) == 0 and len(yNbr) == 0):
+        #if one has no neighbors
+        if (len(xNbr) == 0 or len(yNbr) == 0):
             H.add_edge(x,y,weight=metric)
             continue
             
@@ -92,22 +91,24 @@ def construct_awareness_from_contact_graph(G):
         if (xNbr == set([y]) and yNbr == set([x])):
             metric = 1.0
         else:
-            metric = metric + len(mutualNbrs)/float(len(xNbr.union(yNbr)))
+            metric = metric + (0.5*len(mutualNbrs)/float(len(xNbr.union(yNbr))))
         
         #set as edge weight in new graph
-        if (y not in H[x]):
+        if (y not in H[x] and metric > 0.0):
             H.add_edge(x,y)
-        H[x][y]['weight'] = metric
-        
+        if (metric > 0.0):
+            H[x][y]['weight'] = metric
+
+            assert(H[x][y]['weight'] >= 0 and H[x][y]['weight'] <= 1.0)
+    
     return H
-        
 #Calculate the expected number of neighbors of S in V(G), not including S itself
 def get_exp_coverage(G,S):
     #Coverage probabilities of
     #print "Finding coverage of S = ",S
 
     covg = [0.0 for n in G.nodes()]
-    
+   
     for n in S:
         #Get neighbors
         for b in G.neighbors(n):
@@ -120,6 +121,36 @@ def get_exp_coverage(G,S):
     #return the sum of all of the coverage weights
 
     return sum(covg)
+def get_exp_coverage2(G,S):
+
+    #get neighbor set
+    nbrs = []
+    for v in S:
+        nbrs[0:0] = G[v].keys()
+    nbrs = set(nbrs)
+
+    n = len(G)
+    covg = np.zeros(n)
+
+    #Make log weights
+
+    log_weight = np.zeros((n,n))
+ 
+    for i in S:
+        for j in G[i].keys():
+            if (j not in S):
+                if (G[i][j]['weight'] == 1.0):
+                   #Coverage is guaranteed
+                   log_weight[i,j] = -float('inf') 
+                else:
+                    log_weight[i,j] += math.log(1.0 - G[i][j]['weight'])
+        
+    #Column sums
+    col_sums = np.sum(log_weight,0)
+
+    cm_sum = np.sum(np.exp(col_sums))
+
+    return n - cm_sum
     
 # Find approximation max coverage set using k-greedy method, with t total nodes in solution
 def greedy_expected_max_coverage_set(G,t,k):
@@ -155,6 +186,7 @@ def greedy_expected_max_coverage_set(G,t,k):
         for nodeset in comb(remaining_nodes,sub_k): #For all k combinations of unselected nodes
             #calculate expected coverage with the addition of nodeset to the current solution
             sym_diff = get_exp_coverage(G,soln.union(nodeset))
+
             #print "Coverage of ", soln.union(nodeset), "is ", sym_diff
             if (sym_diff > max_sym_diff):
                 #print "Using ", nodeset, "as current best"
@@ -175,30 +207,34 @@ def greedy_expected_max_coverage_set(G,t,k):
 def committee_closure_augmentation(G,committee,closure_threshold):
     H = G.copy()
     #print "Closing committee", committee 
+
     for x,y in comb(committee,2):
         #add committee-committee edge
         H.add_edge(x,y,weight=1.0)
-        
-        #Close triads which have two committee members
-        for n in set(G[x].keys()).union(list(G[y].keys())).difference(set([x,y])):
-            
-            if (n not in G[y]): #then unclosed triad, missing edge n-y
+  
+
+    for c in committee:
+        #Triads which are both one hop away
+        #Closing = connecting two one-hop neighbors x and y
+        for x,y in comb(G[c].keys(),2):
+            if (x not in G[y]): 
                 r = rand.random()
                 if (r<closure_threshold):
-                    H.add_edge(n,y,weight=1)
-            elif (y not in G[x]): #unclosed triad missing edge n-x
-                r = rand.random()
-                if (r<closure_threshold):
-                    H.add_edge(n,x,weight=1)
-    
-    #Close triads which have one committee member
-    for x in committee:
-        for y in set(G[x].keys()).difference(set(committee)):
-            for z in set(G[y].keys()).difference(set(committee)):
-                if (z not in list(G[x].keys())): #if unclosed triad
+                    H.add_edge(x,y,weight=1)
+                    #print "Adding edge ",x,y
+
+        #Two hop neighbors
+        #Closing = connecting c to two-hop neighbor
+
+        for x in G[c].keys():
+            for y in G[x].keys():
+                if (x not in G[c]): 
                     r = rand.random()
                     if (r<closure_threshold):
-                        H.add_edge(n,x,weight=1.0)
+                        H.add_edge(c,y,weight=1)
+                        #print "Adding edge",c,y
+
+    print "Committee closure performed with ", committee
     return H
     
 
@@ -206,7 +242,8 @@ def committee_closure_augmentation(G,committee,closure_threshold):
 def get_distribution_coverage_time(G_init,k,alpha,closure_param,trials=100,max_tries=100,alg="greedy",draw_freq=0,show_ecc=False):
     time_dist = []
     num_nodes = len(G_init.nodes())
-   
+  
+     
     committee_coverage = []
     max_committee_coverage = []
     committees = []
@@ -224,8 +261,8 @@ def get_distribution_coverage_time(G_init,k,alpha,closure_param,trials=100,max_t
         if (alg.startswith("greedy")):
             #Greedy coverage algorithm
             committee,covg = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),k,1)
-            committee_coverage[-1].append(covg)
-            max_committee_coverage[-1].append(covg)
+            committee_coverage[-1].append(covg/float(num_nodes))
+            max_committee_coverage[-1].append(covg/float(num_nodes))
             committees[-1].append(committee)
 
 
@@ -262,8 +299,8 @@ def get_distribution_coverage_time(G_init,k,alpha,closure_param,trials=100,max_t
              
                 committee,covg = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),k,1)
                 committees[-1].append(committee)
-                committee_coverage[-1].append(covg)
-                max_committee_coverage[-1].append(covg)
+                committee_coverage[-1].append(covg/float(num_nodes))
+                max_committee_coverage[-1].append(covg/float(num_nodes))
 
        
                 #print "Chose commmittee", committee, "with coverage ", covg
@@ -281,12 +318,13 @@ def get_distribution_coverage_time(G_init,k,alpha,closure_param,trials=100,max_t
             covg = get_exp_coverage(G,committee)
 
 
-            committee_coverage[-1].append(covg)
-
+            committee_coverage[-1].append(covg/float(num_nodes))
             #Calculate coverage of greedily selected committee
             _,covg = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),k,1)
             
-            max_committee_coverage[-1].append(covg)
+            max_committee_coverage[-1].append(covg/float(num_nodes))
+            committee_coverage[-1].append(covg/float(num_nodes))
+
 
             if (draw_freq != 0):
                 #print "T=",0
@@ -309,8 +347,7 @@ def get_distribution_coverage_time(G_init,k,alpha,closure_param,trials=100,max_t
                 #Get coverage quality under greedy method
                 _,covg = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),k,1)
             
-                max_committee_coverage[-1].append(covg)
-               
+                max_committee_coverage[-1].append(covg/float(num_nodes))               
                 
                 #draw according to frequency
                 if (draw_freq != 0 and (tries+1) % draw_freq == 0):
@@ -339,7 +376,7 @@ def get_distribution_coverage_time(G_init,k,alpha,closure_param,trials=100,max_t
                 committees[-1].append(committee)
 
                 covg = get_exp_coverage(G,committee)
-                committee_coverage[-1].append(covg)
+                committee_coverage[-1].append(covg/float(num_nodes))
 
 
         
@@ -506,14 +543,16 @@ def list_local_bridges(G):
 
 #G_list = combined_contact_networks_list
 G_list = single_contact_networks_list
+#G_list = [(get_undirected_ER_graph(20,0.15),"er")]
 
 repeats = 1
-trials = 10
-iterations = 30
+trials = 8
+iterations = 15
 frequency = 5
-COMMITTEE_SZ = 6
+COMMITTEE_SZ = 3
 COVERAGE_MIN = 0.9999
-CLOSURE_PARAM = 0.08
+CLOSURE_PARAM = 0.03
+max_tries = 30
 
 
 print("Starting simulation")
@@ -525,13 +564,13 @@ plt.rcParams.update({'font.size': 14})
 
 rand_results = {}
 greedy_results = {}
-
 for z,graph_desc in enumerate(G_list):
 
-    if (z not in [5]):
+    if (z not in [2]):
         continue
+
     G,name = graph_desc
-    print("G has", len(G.nodes()), " nodes")
+    print("G=%s has" %name, len(G.nodes()), " nodes")
     G = nx.convert_node_labels_to_integers(G)
     data_greedy = []
     data_rand = []
@@ -541,12 +580,12 @@ for z,graph_desc in enumerate(G_list):
         print("Using greedy method")
 
         #int(1.5*len(G.nodes()))/COMMITTEE_SZ,
-        t,graphs,committee,covg,max_covg = get_distribution_coverage_time(G,COMMITTEE_SZ,COVERAGE_MIN,CLOSURE_PARAM,trials,max_tries=30,alg="greedy",draw_freq=0,show_ecc=False)
+        t,graphs,committee,covg,max_covg = get_distribution_coverage_time(G,COMMITTEE_SZ,COVERAGE_MIN,CLOSURE_PARAM,trials,max_tries,alg="greedy",draw_freq=0,show_ecc=False)
 
         data_greedy.append((t,graphs,covg,max_covg,committee))
         #data_greedy.append(tuple(t,graphs) for t,graphs in get_distribution_coverage_time(G,COMMITTEE_SZ,COVERAGE_MIN,CLOSURE_PARAM,trials,max_tries=N/COMMITTEE_SZ,alg="greedy",draw_freq=1))
         print("Using random method")
-        t,graphs,committee,covg,max_covg =  get_distribution_coverage_time(G,COMMITTEE_SZ,COVERAGE_MIN,CLOSURE_PARAM,trials,max_tries=30,alg="random",draw_freq=0,show_ecc=False)
+        t,graphs,committee,covg,max_covg =  get_distribution_coverage_time(G,COMMITTEE_SZ,COVERAGE_MIN,CLOSURE_PARAM,trials,max_tries,alg="random",draw_freq=0,show_ecc=False)
         data_rand.append((t,graphs,covg,max_covg,committee))
 
     #print "Data Greedy = " ,data_greedy
@@ -616,7 +655,7 @@ for z,graph_desc in enumerate(G_list):
                 G = nx.convert_node_labels_to_integers(G)
                 _,covg = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),COMMITTEE_SZ,1)
                 print(("Adding coverage value",covg))
-                max_second_covg.append(covg)
+                max_second_covg.append(covg/len(G))
                 
     
                 
@@ -680,7 +719,7 @@ for z,graph_desc in enumerate(G_list):
                     G.remove_node(c)
                 G = nx.convert_node_labels_to_integers(G)
                 _,covg = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),COMMITTEE_SZ,1)
-                max_second_covg.append(covg)
+                max_second_covg.append(covg/len(G))
                 
 
             rand_results[name]['diameter'].append(diameter)
@@ -729,6 +768,7 @@ for z,graph_desc in enumerate(G_list):
 
     plot_comp_results("%s - k=%i - closure=%.2f" %(name,COMMITTEE_SZ,CLOSURE_PARAM),greedy_results[name]['max_second_coverage'],'(greedy) second',greedy_results[name]['max_coverage'][0],'(greedy) first','(Greedy) Max vs Alt Coverage')
     plot_comp_results("%s - k=%i - closure=%.2f" %(name,COMMITTEE_SZ,CLOSURE_PARAM),rand_results[name]['max_second_coverage'],'(rand) second',rand_results[name]['max_coverage'][0],'(rand) first','(Rand) Max vs Alt Coverage')
+    break
 plt.show()
 
 """
@@ -823,5 +863,4 @@ if __name__ == "__main__":
 
     #Show plot from one trial
     plt.show()
-
 """
