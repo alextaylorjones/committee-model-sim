@@ -201,9 +201,10 @@ def greedy_expected_max_coverage_set(G,t,k):
     #Return coverage plus the number of committee members
     return soln,(max_sym_diff+t)
 
-
 ## Close each triplet with at least one node in committee according to threshold
 ## Close all triads in committee
+
+""" NEW - incorrect model
 def committee_closure_augmentation(G,committee,closure_threshold):
     H = G.copy()
     #print "Closing committee", committee 
@@ -236,9 +237,46 @@ def committee_closure_augmentation(G,committee,closure_threshold):
 
     print "Committee closure performed with ", committee
     return H
+"""
+
+
+def committee_closure_augmentation(G,committee,closure_threshold):
+    H = G.copy()
+    #print "Closing committee", committee 
+    for x,y in comb(committee,2):
+        #add committee-committee edge
+        H.add_edge(x,y,weight=1.0)
+        
+    for x,y in comb(committee,2):
+        #Close triads which have two committee members
+        for n in set(G[x].keys()).union(list(G[y].keys())).difference(set([x,y])):
+            
+            if (n not in G[y]): #then unclosed triad, missing edge n-y
+                r = rand.random()
+                if (r<closure_threshold):
+                    H.add_edge(n,y,weight=1)
+            elif (y not in G[x]): #unclosed triad missing edge n-x
+                r = rand.random()
+                if (r<closure_threshold):
+                    H.add_edge(n,x,weight=1)
     
 
-#Plot distribution of times at which given network is covered at alpha fraction by k nodes
+
+    
+
+    """ 
+    #Close triads which have one committee member
+    for x in committee:
+        for y in set(G[x].keys()).difference(set(committee)):
+            for z in set(G[y].keys()).difference(set(committee)):
+                if (z not in list(G[x].keys())): #if unclosed triad
+                    r = rand.random()
+                    if (r<closure_threshold):
+                        H.add_edge(n,x,weight=1.0)
+    """
+
+    return H 
+
 def get_distribution_coverage_time(G_init,k,alpha,closure_param,trials=100,max_tries=100,alg="greedy",draw_freq=0,show_ecc=False):
     time_dist = []
     num_nodes = len(G_init.nodes())
@@ -423,7 +461,7 @@ for data_file in data_files:
         if ((line.split())[AWARENESS_COL] == '1'):
             awareness_graph.add_edge(int((line.split())[0]),int((line.split())[1]),weight=1.0)
     print(("Adding graphs ", data_file.name, "with ", len(contact_graph.nodes())," nodes and ", len(contact_graph.edges()), " edges"))
-    contact_graphs.append((awareness_graph,data_file.name))
+    contact_graphs.append((contact_graph,data_file.name))
     awareness_graphs.append((awareness_graph,data_file.name))
     
     
@@ -546,27 +584,26 @@ G_list = single_contact_networks_list
 #G_list = [(get_undirected_ER_graph(20,0.15),"er")]
 
 repeats = 1
-trials = 8
-iterations = 15
+trials = 5
+iterations = 20
 frequency = 5
-COMMITTEE_SZ = 3
+COMMITTEE_SZ = 6
 COVERAGE_MIN = 0.9999
-CLOSURE_PARAM = 0.03
-max_tries = 30
+CLOSURE_PARAM = 0.08
+max_tries = 25
 
 
 print("Starting simulation")
-print(("Coverage minimum fraction %.2f, committee size %i and closure prob %.2f" % (COVERAGE_MIN,COMMITTEE_SZ,CLOSURE_PARAM)))
+print(("Coverage minimum fraction %.3f, committee size %i and closure prob %.2f" % (COVERAGE_MIN,COMMITTEE_SZ,CLOSURE_PARAM)))
 
 plt.rcParams.update({'font.size': 14})
-
 
 
 rand_results = {}
 greedy_results = {}
 for z,graph_desc in enumerate(G_list):
 
-    if (z not in [2]):
+    if (z not in [0]):
         continue
 
     G,name = graph_desc
@@ -772,6 +809,7 @@ for z,graph_desc in enumerate(G_list):
 plt.show()
 
 """
+
 if __name__ == "__main__":
     
     # Plot degree distributions
@@ -780,8 +818,8 @@ if __name__ == "__main__":
 
     for i,graph_desc in enumerate(G_list):
         #just show 2nd graph
-        if (i==0):
-            continue
+        #if (i==0):
+        #    continue
 
         G,name = graph_desc
         G = nx.convert_node_labels_to_integers(G)
