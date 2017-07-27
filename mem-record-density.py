@@ -7,6 +7,7 @@ import random as rand
 import copy
 import matplotlib.pyplot as plt
 from itertools import combinations as comb
+from scipy.interpolate import interp1d
 
 from os import listdir as ld
 #Load data
@@ -53,11 +54,16 @@ if __name__=="__main__":
                 print((line, "line",i," not long enough", data_file))
                 continue
             if ((line.split())[CONTACT_COL] == '1'):
-                #print "int", (line.split())[CONTACT_COL] 
-                contact_graph.add_edge(int((line.split())[0]),int((line.split())[1]))
+               #print "int", (line.split())[CONTACT_COL] 
+               contact_graph.add_node(int((line.split())[0]))
+               contact_graph.add_node(int((line.split())[1]))
+               contact_graph.add_edge(int((line.split())[0]),int((line.split())[1]))
 
             if ((line.split())[AWARENESS_COL] == '1'):
-                awareness_graph.add_edge(int((line.split())[0]),int((line.split())[1]))
+               awareness_graph.add_node(int((line.split())[0]))
+               awareness_graph.add_node(int((line.split())[1]))
+               awareness_graph.add_edge(int((line.split())[0]),int((line.split())[1]))
+
         print(("Adding graphs ", data_file.name, "with ", len(contact_graph.nodes())," nodes and ", len(contact_graph.edges()), " edges"))
         contact_graphs.append((contact_graph,data_file.name))
         awareness_graphs.append((awareness_graph,data_file.name))
@@ -73,7 +79,8 @@ if __name__=="__main__":
 
 
     #end load data
-    X = np.arange(0.0,1.1,0.05)
+    bucket_width = .03
+    X = np.arange(0.0,1,bucket_width)
 
     Y1 = [[] for _ in X]
     Y2 = [[] for _ in X]
@@ -84,7 +91,7 @@ if __name__=="__main__":
         contact_graph,name = graph_desc
 
         print "Analyzing graph file", name
-
+        
         #same name, no need to pull that
         awareness_graph = awareness_graphs[i][0]
         
@@ -119,14 +126,20 @@ if __name__=="__main__":
                     dis_1[(x,y)] = (get_mutual_contact_density(contact_graph,y,x),aware)
         
 
-            mutual_nbrs = len((set(contact_graph[x].keys()).intersection(set(contact_graph[y].keys())).difference(set([x,y]))))
-            if (mutual_nbrs > 0):
+            #mutual_nbrs = len((set(contact_graph[x].keys()).intersection(set(contact_graph[y].keys())).difference(set([x,y]))))
 
+            if (nx.shortest_path_length(contact_graph,source=x,target=y) == 2):
                 aware = 0
-                if (x in awareness_graph[y].keys() and y in awareness_graph[x].keys()):
+                if (y in awareness_graph[x].keys()):
                     aware = 1
-
                 dis_2[(x,y)] = (get_mutual_contact_density(contact_graph,x,y),aware)
+
+            if (nx.shortest_path_length(contact_graph,source=y,target=x) == 2):
+                aware = 0
+                if (x in awareness_graph[y].keys()):
+                    aware = 1
+                dis_2[(y,x)] = (get_mutual_contact_density(contact_graph,y,x),aware)
+
 
         """
         #dis 2 pairs
@@ -163,38 +176,83 @@ if __name__=="__main__":
         for k in dis_1:
             #print "Entry:",dis_1[k]
             i = 0
-            while (X[i] < dis_1[k][0]):
-                i += 1
-                if (i == len(X)):
-                    break
+            if (dis_1[k][0] < X[0]):
+                i = 1
+            else:
+                while (X[i] <= dis_1[k][0]):
+                    i += 1
+                    if (i == len(X)):
+                        break
+            #print "added for ",X[i-1],"and value is",dis_1[k][0]
             Y1[i-1].append(dis_1[k][1])
 
         for k in dis_2:
             #print "Entry:",dis_2[k]
             i = 0
-            while (X[i] < dis_2[k][0]):
-                i += 1
-                if (i == len(X)):
-                    break
+            if (dis_2[k][0] < X[0]):
+                i = 1
+            else:
+                while (X[i] <= dis_2[k][0]):
+                    i += 1
+                    if (i == len(X)):
+                        break
+            #print "added for ",X[i-1],"and value is",dis_2[k][0]
             Y2[i-1].append(dis_2[k][1])
 
+ 
+        dis_3_total = 0
+
+        dis_3_aware = 0
+        for x,y in comb(contact_graph.nodes(),2):
+            if (nx.shortest_path_length(contact_graph,source=x,target=y) == 3):
+                dis_3_total += 1
+                if (y in awareness_graph[x].keys()):
+                    dis_3_aware += 1
+
+            if (nx.shortest_path_length(contact_graph,source=y,target=x) == 3):
+                dis_3_total += 1
+                if (x in awareness_graph[y].keys()):
+                    dis_3_aware += 1
+        print "Distance 3 total %i : awareness also %i" % (dis_3_total,dis_3_aware)
 
     #Average resutls
     for i in range(len(X)):
-        if (len(Y1[i]) > 10):
+        if (len(Y1[i]) > 3):
             Y1[i] = float(sum(Y1[i]))/float(len(Y1[i]))
         else:
             Y1[i] = None
-        if (len(Y2[i]) > 10):
+        if (len(Y2[i]) > 20):
             Y2[i] = float(sum(Y2[i]))/float(len(Y2[i]))
         else:
             Y2[i] = None
 
     #plot 
-    plt.plot(X,Y1,label="dis = 1")
-    plt.plot(X,Y2,label="dis = 2")
+    for x in X:
+        print x,",",
+    print "\n"
+    for y in Y1:
+        print y, ",",
+    print "\n"
+    for x in X:
+        print x,",",
+    print "\n"
+    for y in Y2:
+        print y, ",",
+
+    print "\n\n\n"
+    plt.title("Density of Memory Records")
+    plt.xlabel("Fraction of i or j Contacts That Are Mutual")
+    plt.ylabel("Likelihood of (i,j) Awareness Edge")
+    plt.plot(X,Y1,'bo',label="dis(i,j) = 1")
+    plt.plot(X,[(0.5 + 0.5*x) for x in X],'--',color='b',label="JS ideal, dis(i,j) = 1")
+
+    plt.plot(X,Y2,'r^',label="dis(i,j) = 2")
+    plt.plot(X,[(0.5*x) for x in X],'--',color='r',label="JS ideal, dis(i,j) = 2")
     plt.legend()
 
 
     plt.show()
-        
+
+    Y1 = [[]  for _ in X]
+    Y2 = [[]  for _ in X]
+      
