@@ -26,7 +26,7 @@ def get_mutual_contact_density(G,x,y):
 
 if __name__=="__main__":
     CONTACT_COL = 4 #indexed from 0
-    AWARENESS_COL = 8 #indexed from 0
+    AWARENESS_COL = 6 #indexed from 0
 
     contact_graphs = []
     awareness_graphs = []
@@ -73,6 +73,12 @@ if __name__=="__main__":
 
 
     #end load data
+    X = np.arange(0.0,1.1,0.05)
+
+    Y1 = [[] for _ in X]
+    Y2 = [[] for _ in X]
+
+
 
     for i,graph_desc in enumerate(contact_graphs):
         contact_graph,name = graph_desc
@@ -154,25 +160,41 @@ if __name__=="__main__":
 
         
         
-        X1 = np.arange(0.0,1.1,0.1)
-        X2 = np.arange(0.1,1.2,0.1)
+        for k in dis_1:
+            #print "Entry:",dis_1[k]
+            i = 0
+            while (X[i] < dis_1[k][0]):
+                i += 1
+                if (i == len(X)):
+                    break
+            Y1[i-1].append(dis_1[k][1])
 
-        X_range = [(X1[i],X2[i]) for _ in X1]
-        Y = [[] for _ in X_range]
-
-        for k in dis_1.keys():
-            mutual_nbr_ratio = dis_1[k][0]
-            for i,xr in enumerate(X_range):
-                x_lo = xr[0]
-                x_hi = xr[1]            
-                if (x_lo <= mutual_nbr_ratio and x_hi >= mutual_nbr_ratio):
-                    #add one to list of awareness relationship status
-                    print "Adding awareness of", dis_1[k][1]," for pair",k," with mutual ratio",mutual_nbr_ratio, "in range",xr
-                    Y[i].append(dis_1[k][1]) 
+        for k in dis_2:
+            #print "Entry:",dis_2[k]
+            i = 0
+            while (X[i] < dis_2[k][0]):
+                i += 1
+                if (i == len(X)):
+                    break
+            Y2[i-1].append(dis_2[k][1])
 
 
-        #average the awareness counts
+    #Average resutls
+    for i in range(len(X)):
+        if (len(Y1[i]) > 10):
+            Y1[i] = float(sum(Y1[i]))/float(len(Y1[i]))
+        else:
+            Y1[i] = None
+        if (len(Y2[i]) > 10):
+            Y2[i] = float(sum(Y2[i]))/float(len(Y2[i]))
+        else:
+            Y2[i] = None
 
-        plt.plot(X1,Y)
-        plt.show()
+    #plot 
+    plt.plot(X,Y1,label="dis = 1")
+    plt.plot(X,Y2,label="dis = 2")
+    plt.legend()
 
+
+    plt.show()
+        
