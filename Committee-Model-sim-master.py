@@ -465,7 +465,11 @@ for data_file in data_files:
     awareness_graphs.append((awareness_graph,data_file.name))
     
     
-            
+#Check graphs
+for g,name in contact_graphs:
+    for x,y in g.edges():
+        assert(x in g.nodes() and x in g[y].keys() and y in g[x].keys())
+
             
 #close files
 for data_file in data_files:
