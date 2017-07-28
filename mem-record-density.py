@@ -16,14 +16,12 @@ def get_mutual_contact_density(G,x,y):
     #JS Metric
     xNbr = set(G[x].keys())
     yNbr = set(G[y].keys())
-    
     if (len(xNbr.union(yNbr)) == 0):
         print "No contacts for  pair",x,y
         return 1.0
 
     return float(len(xNbr.intersection(yNbr)))/float(len(xNbr.union(yNbr)))
     #return float(len(xNbr.intersection(yNbr)))
-     
 
 if __name__=="__main__":
     CONTACT_COL = 4 #indexed from 0
@@ -40,14 +38,11 @@ if __name__=="__main__":
         if (filename.endswith(".txt")):
             data_files.append(open("./data/%s" % filename))
 
-        
-
 
     #construct graphs
     for data_file in data_files:
         contact_graph = nx.Graph()
         awareness_graph = nx.Graph()
-        
         #read lines
         for i,line in enumerate(data_file):
             if (len(line.split()) != 10):
@@ -69,14 +64,49 @@ if __name__=="__main__":
         awareness_graphs.append((awareness_graph,data_file.name))
 
         #DEBUG
-        
-        
-                
-                
     #close files
     for data_file in data_files:
         data_file.close()
 
+    #DEBUG
+
+    for i,graph_desc in enumerate(contact_graphs):
+        graph,name = graph_desc
+        awareness_graph = awareness_graphs[i][0]
+        prob_mr_lt2 = []
+        prob_mr_ge3 = []
+
+        for x,y in comb(graph.nodes(),2):
+            try:
+                if (nx.shortest_path_length(graph,source=x,target=y) <= 2):
+                    if (x in awareness_graph.nodes() and y in awareness_graph[x].keys()):
+                        prob_mr_lt2.append(1)
+                    else:
+                        prob_mr_lt2.append(0)
+                else:
+                    if (x in awareness_graph.nodes() and y in awareness_graph[x].keys()):
+                        prob_mr_ge3.append(1)
+                    else:
+                        prob_mr_ge3.append(0)
+                if (nx.shortest_path_length(graph,source=y,target=x) <= 2):
+                    if (y in awareness_graph.nodes() and x in awareness_graph[y].keys()):
+                        prob_mr_lt2.append(1)
+                    else:
+                        prob_mr_lt2.append(0)
+                else:
+                    if (y in awareness_graph.nodes() and x in awareness_graph[y].keys()):
+                        prob_mr_ge3.append(1)
+                    else:
+                        prob_mr_ge3.append(0)
+            except:
+                print "Error occured for pair",x,y
+
+
+        print "Graph name: ",name
+        print "\t Pr(MR|dis <= 2)",float(sum(prob_mr_lt2))/len(prob_mr_lt2), " (num= ",sum(prob_mr_lt2), "with ", len(prob_mr_lt2), "total pairs"
+        print "\t Pr(MR|dis >= 3)",float(sum(prob_mr_ge3))/len(prob_mr_ge3), " (num= ",sum(prob_mr_ge3), "with ", len(prob_mr_ge3), "total pairs"
+
+    assert(0)
 
     #end load data
     bucket_width = .03

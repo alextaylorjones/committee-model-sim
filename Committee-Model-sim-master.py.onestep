@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from itertools import combinations as comb
 #constants
 SEED=4
-sample_count=3
+sample_count=5
 
 #**** Graph building helper functions ****#
 
@@ -125,6 +125,7 @@ def get_one_step_opt_committee(G_contact,k,closure_param):
     max_covg = 0
     max_committee =[]
     max_overlap = -1
+    print "Coverage : ",
     for x in range(k):
         tmp_committee = committee[x:x+k]
         covg = []
@@ -132,15 +133,18 @@ def get_one_step_opt_committee(G_contact,k,closure_param):
             #Perform closure with overlapping portion of large committee
             H = committee_closure_augmentation(G,tmp_committee,closure_param)
             #Calculate coverage of first committee in resulting awareness network
-            covg.append(get_exp_coverage(construct_awareness_from_contact_graph(H),committee[0:k]))
+            _,c = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(H),k,1)
+            covg.append(c)
         #average coverage
         covg = sum(covg)/float(len(covg))
         if (covg > max_covg):
             max_covg = covg
             max_committee = tmp_committee
-            max_overlap = x
+            max_overlap = k-x
+        print "(overlap=%i,covg=%.3f" %(k-x,covg),
+
     covg = get_exp_coverage(construct_awareness_from_contact_graph(G),max_committee)
-    print "In one-step process, max overlap was ",k-x
+    print "In one-step process, max overlap was ",max_overlap
     #Select max committee as committee
     return set(max_committee),covg
 
@@ -654,7 +658,7 @@ G_list = single_contact_networks_list
 #G_list = [(get_undirected_ER_graph(20,0.15),"er")]
 
 repeats = 1
-trials = 5
+trials = 3
 iterations = 20
 frequency = 5
 COMMITTEE_SZ = 6

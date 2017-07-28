@@ -36,7 +36,7 @@ def get_powerlaw_tree_graph(nodeNum,gamma):
 
 #Graph helper functions
 
-def draw_graph_helper(H,positionFlag="spring",drawNodeLabels=True,drawEdgeLabels=False,pos=None):
+def draw_graph_helper(H,positionFlag="spring",drawNodeLabels=False,drawEdgeLabels=False,pos=None):
     
     if (positionFlag.startswith("spring") and pos==None):
         pos=nx.spring_layout(H,iterations=20)
@@ -44,17 +44,15 @@ def draw_graph_helper(H,positionFlag="spring",drawNodeLabels=True,drawEdgeLabels
         pos=nx.random_layout(H)
     plt.figure(figsize=(20,20))
     
-    nx.draw_networkx_nodes(H,pos)
+    nx.draw_networkx_nodes(H,pos,node_color='k',alpha=0.8, node_shape='o')
     nx.draw_networkx_edges(H,pos)
     if (drawNodeLabels):
         nx.draw_networkx_labels(H,pos,fontsize=12)
-    
     labels = nx.get_edge_attributes(H,'weight')
     labelsNonZero = {}
     for l in list(labels.keys()):
         if labels[l] > 0.0001:
             labelsNonZero[l] = labels[l]
-            
     if (drawEdgeLabels):
         nx.draw_networkx_edge_labels(H,pos,edge_labels=labelsNonZero)
     
@@ -340,8 +338,6 @@ def get_distribution_coverage_time(G_init,k,alpha,closure_param,trials=100,max_t
                 committee_coverage[-1].append(covg/float(num_nodes))
                 max_committee_coverage[-1].append(covg/float(num_nodes))
 
-       
-                #print "Chose commmittee", committee, "with coverage ", covg
         elif (alg.startswith("random")):
             #Greedy coverage algorithm
             
@@ -463,8 +459,7 @@ for data_file in data_files:
     print(("Adding graphs ", data_file.name, "with ", len(contact_graph.nodes())," nodes and ", len(contact_graph.edges()), " edges"))
     contact_graphs.append((contact_graph,data_file.name))
     awareness_graphs.append((awareness_graph,data_file.name))
-    
-    
+
 #Check graphs
 for g,name in contact_graphs:
     for x,y in g.edges():
