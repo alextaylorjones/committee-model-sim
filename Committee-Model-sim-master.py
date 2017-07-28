@@ -398,7 +398,7 @@ for data_file in data_files:
     #read lines
     for i,line in enumerate(data_file):
         if (len(line.split()) != 10):
-            print((line, "line",i," not long enough", data_file))
+            print(("",line, "line",i," not long enough", data_file))
             continue
         if ((line.split())[CONTACT_COL] == '1'):
             #print "int", (line.split())[CONTACT_COL] 
@@ -468,57 +468,49 @@ na
 
 """
 
-# In[48]:
+
+def plot_comp_results(plt_name,all_data,metric_name,plt_type='avg',saveName=None,noNewFigure=False):
 
 
-#Take
-def plot_comp_results(all_data,plt_name,plt_type='avg',saveName=None,noNewFigure=False):
-
-    #all_data = [(data1,data1name),(data2,data2name)]
-    
-    for alg_name in all_data.keys():
-
-    if (noNewFigure == False):
-        plt.figure()
-
-    #Aggregate data1 and data2
+    print("\n\b Plotting ",all_data)
     if (plt_type.startswith('avg')):
-        #Iterate through each kind of data
-        for data,name in all_data:
  
-            data_avg = []
+        if (noNewFigure == False):
+            plt.figure()
 
-            for record in data:
-                #Store records in data_avg
-                for i,entry in enumerate(record):
-                    if (i+1 > len(data_avg)):
-                        data_avg.append([entry])
-                        assert(len(data_avg) == i+1)
-                    else:
-                        data_avg[i].append(entry)
+       
+        for alg_name in list(all_data.keys()):
+            
+            #Iterate through each kind of data
+            for data in all_data[alg_name][metric_name]:
+                data_avg = []
 
-            print(data_avg)
-            to_plot = []
-            #Average entries
-            for entry in data_avg:
-                to_plot.append(float(sum(entry))/len(entry))
+                for record in data[metric_name]:
+                    #Store records in data_avg
+                    for i,entry in enumerate(record):
+                        if (i+1 > len(data_avg)):
+                            data_avg.append([entry])
+                            assert(len(data_avg) == i+1)
+                        else:
+                            data_avg[i].append(entry)
 
-            #Plot data average
-            print(("Plottting data",plt_name," for type",name,":",to_plot))
-            plt.plot(list(range(len(to_plot))),to_plot,label=name)
+                to_plot = []
+                #Average entries
+                for entry in data_avg:
+                    to_plot.append(float(sum(entry))/len(entry))
+
+                #Plot data average
+                print(("Plottting data",metric_name," for alg",alg_name,":",to_plot))
+                plt.plot(list(range(len(to_plot))),to_plot,label=alg_name)
+            
+        plt.title("Graph: %s" % graph_name)
+        plt.legend()
+        plt.xlabel("Iteration Count")
+        plt.ylabel("Average Value of %s" % plt_name)
         
-
-    #Create legend from data name entries
-    #plt.legend(handles=[ entry[1] for entry in all_data])
-
-    plt.title("Graph: %s" % graph_name)
-    plt.legend()
-    plt.xlabel("Iteration Count")
-    plt.ylabel("Average Value of %s" % plt_name)
-    
-    if (saveName != None):
-        plt.savefig("plots/%s.png"%saveName,bbox_inches='tight')
-    #plt.show()
+        if (saveName != None):
+            plt.savefig("plots/%s.png"%saveName,bbox_inches='tight')
+        #plt.show()
 
 def list_local_bridges(G):
     local_bridges = []
@@ -536,18 +528,19 @@ def list_local_bridges(G):
 
 
 
-#G_list = combined_contact_networks_list
 G_list = single_contact_networks_list
-#G_list = [(get_undirected_ER_graph(20,0.15),"er")]
 
-repeats = 1
-trials = 20 #metrics
+alg_list= ['greedy','random']
+
+metric_list = ['diameter','num_edges','coverage',  'max_coverage','max_second_coverage','clustering','local_bridges','committee']
+
+trials = 2 #metrics
 iterations = 20 #degree dist
 frequency = 5
 COMMITTEE_SZ = 6
 COVERAGE_MIN = 0.9999
 CLOSURE_PARAM = 0.08
-max_tries = 30
+max_tries = 3
 
 
 print("Starting simulation")
@@ -555,9 +548,9 @@ print(("Coverage minimum fraction %.3f, committee size %i and closure prob %.2f"
 
 plt.rcParams.update({'font.size': 14})
 
+#Store result
+results = {}
 
-rand_results = {}
-greedy_results = {}
 for z,graph_desc in enumerate(G_list):
 
     if (z not in [4]):
@@ -566,29 +559,27 @@ for z,graph_desc in enumerate(G_list):
     G,name = graph_desc
     print(("G=%s has" %name, len(G.nodes()), " nodes"))
     G = nx.convert_node_labels_to_integers(G)
-    data_greedy = []
-    data_rand = []
+    data_set = []
     
     #repeat process several times, adding all times to one list
-    for c in range(repeats):
     for alg in alg_list:
-        print("Using %s method"%alg)
+        print(("Using %s method"%alg))
         t,graphs,committee,covg,max_covg = get_distribution_coverage_time(G,COMMITTEE_SZ,COVERAGE_MIN,CLOSURE_PARAM,trials,max_tries,alg=alg,draw_freq=0,show_ecc=False)
-
         data_set.append((t,graphs,covg,max_covg,committee,alg))
-        #data_greedy.append(tuple(t,graphs) for t,graphs in get_distribution_coverage_time(G,COMMITTEE_SZ,COVERAGE_MIN,CLOSURE_PARAM,trials,max_tries=N/COMMITTEE_SZ,alg="greedy",draw_freq=1))
 
-    #print "Data Greedy = " ,data_greedy
-
+    print(data_set)
+    #Post process graphs
     for data in data_set:
-
+        #DEBUG 
         #copy time distribution of convergence
         time_dist = []
         alg = data[-1] 
+
+        print("\nFull data for ",alg,data)
         results[name] = {}
         results[name][alg] = {}
         
-       
+
         results[name][alg]['diameter'] = [] 
         results[name][alg]['num_edges'] = [] 
         results[name][alg]['coverage'] = [] 
@@ -598,61 +589,61 @@ for z,graph_desc in enumerate(G_list):
         results[name][alg]['local_bridges'] = [] 
         results[name][alg]['committee'] = [] 
 
-        print("Calculating stats (%s)"%alg)   
-        for x,record in enumerate(data):
+        print(("Calculating stats (%s)"%alg))   
 
-            #Save times
-            times = record[0]
-            time_dist = time_dist + times
-        
-            #Record diameter trends
-            graph_trials = record[1]
+        #for x,record in enumerate(data):
+        #Save times
+        times = data[0]
+        time_dist = time_dist + times
+    
+        #Record diameter trends
+        graph_trials = data[1]
 
-            #Record committees
-            committee_lists = record[4]
+        #Record committees
+        committee_lists = data[4]
 
-            for y,trial in enumerate(graph_trials):
-                diameter = []
-                edges = []
-                clustering = []
-                local_bridges = []
-                degrees = []
-                max_second_covg = []
-                print("Checking graphs in trial", trial)
-                for i,graph in enumerate(trial):
-                    #print "Graph edges",len(graph.edges())
-                    diameter.append(nx.diameter(graph))
-                    edges.append(len(graph.edges()))
-                    clustering.append(nx.average_clustering(graph))
-                    local_bridges.append(len(list_local_bridges(graph))/2)
-                    
-                    #Remove committee from graph and retry
-                    committee = committee_lists[y][i]
-                    #print "Coverage at time ",i,"of first set is ",covg, " and should be ",record[2][y][i]
-                    G= graph.copy() 
-                    for c in committee:
-                        G.remove_node(c)
-                    G = nx.convert_node_labels_to_integers(G)
-                    _,covg = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),COMMITTEE_SZ,1)
-                    #print(("Adding coverage value",covg))
-                    max_second_covg.append(covg/len(G))
-                    
-        
-                    
-
-                    results[name][alg]['diameter'].append(diameter)
-                    results[name][alg]['num_edges'].append(edges)
-                    results[name][alg]['clustering'].append(clustering)
-                    results[name][alg]['local_bridges'].append(local_bridges)
-                    results[name][alg]['max_second_coverage'].append(max_second_covg)
+        for y,trial in enumerate(graph_trials):
+            diameter = []
+            edges = []
+            clustering = []
+            local_bridges = []
+            degrees = []
+            max_second_covg = []
+            print(("Checking graphs in trial", trial))
+            for i,graph in enumerate(trial):
+                #print "Graph edges",len(graph.edges())
+                diameter.append(nx.diameter(graph))
+                edges.append(len(graph.edges()))
+                clustering.append(nx.average_clustering(graph))
+                local_bridges.append(len(list_local_bridges(graph))/2)
+                
+                #Remove committee from graph and retry
+                committee = committee_lists[y][i]
+                #print "Coverage at time ",i,"of first set is ",covg, " and should be ",record[2][y][i]
+                G= graph.copy() 
+                for c in committee:
+                    G.remove_node(c)
+                G = nx.convert_node_labels_to_integers(G)
+                _,covg = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),COMMITTEE_SZ,1)
+                #print(("Adding coverage value",covg))
+                max_second_covg.append(covg/len(G))
+                
+    
                 
 
+                results[name][alg]['diameter'].append(diameter)
+                results[name][alg]['num_edges'].append(edges)
+                results[name][alg]['clustering'].append(clustering)
+                results[name][alg]['local_bridges'].append(local_bridges)
+                results[name][alg]['max_second_coverage'].append(max_second_covg)
+            
+
             #Record coverage
-            results[name][alg]['coverage'].append(record[2])
-            results[name][alg]['max_coverage'].append(record[3])
+            results[name][alg]['coverage'].append(data[2])
+            results[name][alg]['max_coverage'].append(data[3])
 
             #Record committee consistency
-            committee_lists = record[4]
+            committee_lists = data[4]
             for committee_list in committee_lists:
                 committee_remain= []
                 for i,committee in enumerate(committee_list):
@@ -666,11 +657,9 @@ for z,graph_desc in enumerate(G_list):
                 results[name][alg]['committee'].append(committee_remain)
                 
          
-        print(("Times recorded for %s are "%alg,time_dist_greedy))
-
         #Plot data
-        for metric in plot_metrics:
-            plot_comp_results("%s - k=%i - closure=%.2f" %(name,COMMITTEE_SZ,CLOSURE_PARAM),results[name],'diameter',saveName="diameter-%s"%name,noNewFigure=True)
+        for metric in metric_list:
+            plot_comp_results("%s - k=%i - closure=%.2f" %(name,COMMITTEE_SZ,CLOSURE_PARAM),results[name],metric,saveName="%s-%s"%(metric,name),noNewFigure=True)
    
 
 """
