@@ -11,6 +11,20 @@ from itertools import combinations as comb
 #constants
 SEED=4
 np.random.seed(SEED)
+run_id = str(np.random.rand())
+
+def mkdir_p(mypath):
+    '''Creates a directory. equivalent to using mkdir -p on the command line'''
+
+    from errno import EEXIST
+    from os import makedirs,path
+
+    try:
+        makedirs(mypath)
+    except OSError as exc: # Python >2.5
+        if exc.errno == EEXIST and path.isdir(mypath):
+            pass
+        else: raise
 #**** Graph building helper functions ****#
 
 #degree k, rewiring probability p
@@ -131,7 +145,7 @@ def get_t_step_opt_committee(G_contact,t,k,closure_param):
     max_covg = 0
     max_committee =[]
     max_overlap = -1
-    print "Coverage : ",
+    print("Coverage : ", end=' ')
     for x in range(k):
         tmp_committee = committee[x:x+k]
         covg = []
@@ -150,11 +164,11 @@ def get_t_step_opt_committee(G_contact,t,k,closure_param):
             max_covg = covg
             max_committee = tmp_committee
             max_overlap = k-x
-        print "(overlap=%i,covg=%.3f" %(k-x,covg),
+        print("(overlap=%i,covg=%.3f" %(k-x,covg), end=' ')
 
     #Calculate actual coverage using max_committee
     covg = get_exp_coverage(construct_awareness_from_contact_graph(G),max_committee)
-    print "In %i-step process, max overlap was "%t,max_overlap
+    print("In %i-step process, max overlap was "%t,max_overlap)
     #Select max committee as committee
     return set(max_committee),covg
 
@@ -608,7 +622,8 @@ def plot_comp_results(plt_name,all_data,metric_name,plt_type='avg',saveName=None
         plt.ylabel("Average Value of %s" % metric_name)
         
         if (saveName != None):
-            plt.savefig("plots/%s.png"%saveName,bbox_inches='tight')
+            mkdir_p("plots/%s"%run_id)
+            plt.savefig("plots/%s/%s.png"%(run_id,saveName),bbox_inches='tight')
         #plt.show()
 
 def list_local_bridges(G):
@@ -629,21 +644,19 @@ def list_local_bridges(G):
 
 G_list = single_contact_networks_list
 
-alg_list= ['greedy','step-2']
+alg_list= ['step-1','step-2','greedy']
 
 metric_list = ['diameter','num_edges','coverage',  'max_coverage','max_second_coverage','clustering','local_bridges','committee']
 
-trials = 2 #metrics
-iterations = 20 #degree dist
-frequency = 5
+trials = 8
 COMMITTEE_SZ = 6
 COVERAGE_MIN = 0.9999
 CLOSURE_PARAM = 0.08
-max_tries = 3
+max_tries =30
 
 #for t-step lookahead
-step = 2
-sample_count=2
+step = 1
+sample_count=10
 
 print("Starting simulation")
 print(("Coverage minimum fraction %.3f, committee size %i and closure prob %.2f" % (COVERAGE_MIN,COMMITTEE_SZ,CLOSURE_PARAM)))
@@ -654,10 +667,8 @@ plt.rcParams.update({'font.size': 14})
 results = {}
 
 for z,graph_desc in enumerate(G_list):
-
-    if (z not in [4]):
+    if (z not in [1]):
         continue
-
     G,name = graph_desc
     print(("G=%s has" %name, len(G.nodes()), " nodes"))
     G = nx.convert_node_labels_to_integers(G)
@@ -676,7 +687,7 @@ for z,graph_desc in enumerate(G_list):
         #DEBUG 
         #copy time distribution of convergence
         time_dist = []
-        print ("Processing data for algorithm",alg)
+        print(("Processing data for algorithm",alg))
         alg = data[-1] 
         results[name][alg] = {}
 
@@ -708,7 +719,6 @@ for z,graph_desc in enumerate(G_list):
             local_bridges = []
             degrees = []
             max_second_covg = []
-            print(("Checking graphs in trial", trial))
             for i,graph in enumerate(trial):
                 #print "Graph edges",len(graph.edges())
                 diameter.append(nx.diameter(graph))
@@ -770,6 +780,8 @@ print("Done")
 #plt.show()
 
 """
+iterations = 10 #degree dist
+frequency = 5
 
 if __name__ == "__main__":
     
