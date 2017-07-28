@@ -10,8 +10,8 @@ import matplotlib.pyplot as plt
 from itertools import combinations as comb
 #constants
 SEED=4
-np.random.seed(SEED)
 run_id = str(np.random.rand())
+np.random.seed(SEED)
 
 def mkdir_p(mypath):
     '''Creates a directory. equivalent to using mkdir -p on the command line'''
@@ -644,18 +644,17 @@ def list_local_bridges(G):
 
 G_list = single_contact_networks_list
 
-alg_list= ['step-1','step-2','greedy']
+alg_list= ['greedy','random','step-1','step-2','step-3','step-4','step-5']
 
 metric_list = ['diameter','num_edges','coverage',  'max_coverage','max_second_coverage','clustering','local_bridges','committee']
 
-trials = 8
-COMMITTEE_SZ = 6
-COVERAGE_MIN = 0.9999
-CLOSURE_PARAM = 0.08
-max_tries =30
+trials = 10
+COMMITTEE_SZ = 5
+COVERAGE_MIN = 1.0
+CLOSURE_PARAM = 0.05
+max_tries = 50
 
 #for t-step lookahead
-step = 1
 sample_count=10
 
 print("Starting simulation")
@@ -667,8 +666,6 @@ plt.rcParams.update({'font.size': 14})
 results = {}
 
 for z,graph_desc in enumerate(G_list):
-    if (z not in [1]):
-        continue
     G,name = graph_desc
     print(("G=%s has" %name, len(G.nodes()), " nodes"))
     G = nx.convert_node_labels_to_integers(G)
@@ -766,23 +763,20 @@ for z,graph_desc in enumerate(G_list):
     print("Results:")
     #Plot data
     for metric in metric_list:
-        plot_comp_results("%s - k=%i - closure=%.2f" %(name,COMMITTEE_SZ,CLOSURE_PARAM),results[name],metric,saveName="%s-%s"%(metric,name))
+        plot_comp_results("%s - k=%i - closure=%.2f - sample count %i" %(name,COMMITTEE_SZ,CLOSURE_PARAM,sample_count),results[name],metric,saveName="%s-%s"%(metric,name))
 
 
-"""
+    #plt.ylim([-0.1,1.1])
+    #for alg in alg_list:
+    #        plot_comp_results("%s - k=%i - closure=%.2f" %(name,COMMITTEE_SZ,CLOSURE_PARAM),results[name][alg]['max_second_coverage'],'(greedy) second',greedy_results[name]['alg']['max_coverage'][0],'(greedy) first','(Greedy) Max vs Alt Coverage',saveName="first-second-greedy-%s"%name)
 
-    plt.ylim([-0.1,1.1])
-        for alg in alg_list:
-            plot_comp_results("%s - k=%i - closure=%.2f" %(name,COMMITTEE_SZ,CLOSURE_PARAM),results[name][alg]['max_second_coverage'],'(greedy) second',greedy_results[name]['alg']['max_coverage'][0],'(greedy) first','(Greedy) Max vs Alt Coverage',saveName="first-second-greedy-%s"%name)
-
-"""
-print("Done")
+#print("Done")
 #plt.show()
 
-"""
-iterations = 10 #degree dist
+iterations = 30 #degree dist
 frequency = 5
 
+"""
 if __name__ == "__main__":
     
     # Plot degree distributions
