@@ -1,5 +1,6 @@
 #!/usr/bin/python
 import networkx as nx
+import re
 import collections
 import math
 import numpy as np
@@ -9,7 +10,7 @@ import matplotlib.pyplot as plt
 from itertools import combinations as comb
 #constants
 SEED=4
-
+np.random.seed(SEED)
 #**** Graph building helper functions ****#
 
 #degree k, rewiring probability p
@@ -124,7 +125,7 @@ def get_exp_coverage2(G,S):
     #get neighbor set
     nbrs = []
     for v in S:
-        nbrs[0:0] = G[v].keys()
+        nbrs[0:0] = list(G[v].keys())
     nbrs = set(nbrs)
 
     n = len(G)
@@ -135,7 +136,7 @@ def get_exp_coverage2(G,S):
     log_weight = np.zeros((n,n))
  
     for i in S:
-        for j in G[i].keys():
+        for j in list(G[i].keys()):
             if (j not in S):
                 if (G[i][j]['weight'] == 1.0):
                    #Coverage is guaranteed
@@ -200,43 +201,7 @@ def greedy_expected_max_coverage_set(G,t,k):
     return soln,(max_sym_diff+t)
 
 ## Close each triplet with at least one node in committee according to threshold
-## Close all triads in committee
-
-""" NEW - incorrect model
-def committee_closure_augmentation(G,committee,closure_threshold):
-    H = G.copy()
-    #print "Closing committee", committee 
-
-    for x,y in comb(committee,2):
-        #add committee-committee edge
-        H.add_edge(x,y,weight=1.0)
-  
-
-    for c in committee:
-        #Triads which are both one hop away
-        #Closing = connecting two one-hop neighbors x and y
-        for x,y in comb(G[c].keys(),2):
-            if (x not in G[y]): 
-                r = rand.random()
-                if (r<closure_threshold):
-                    H.add_edge(x,y,weight=1)
-                    #print "Adding edge ",x,y
-
-        #Two hop neighbors
-        #Closing = connecting c to two-hop neighbor
-
-        for x in G[c].keys():
-            for y in G[x].keys():
-                if (x not in G[c]): 
-                    r = rand.random()
-                    if (r<closure_threshold):
-                        H.add_edge(c,y,weight=1)
-                        #print "Adding edge",c,y
-
-    print "Committee closure performed with ", committee
-    return H
-"""
-
+## Close all triads which have one edge in committee
 
 def committee_closure_augmentation(G,committee,closure_threshold):
     H = G.copy()
@@ -257,22 +222,6 @@ def committee_closure_augmentation(G,committee,closure_threshold):
                 r = rand.random()
                 if (r<closure_threshold):
                     H.add_edge(n,x,weight=1)
-    
-
-
-    
-
-    """ 
-    #Close triads which have one committee member
-    for x in committee:
-        for y in set(G[x].keys()).difference(set(committee)):
-            for z in set(G[y].keys()).difference(set(committee)):
-                if (z not in list(G[x].keys())): #if unclosed triad
-                    r = rand.random()
-                    if (r<closure_threshold):
-                        H.add_edge(n,x,weight=1.0)
-    """
-
     return H 
 
 def get_distribution_coverage_time(G_init,k,alpha,closure_param,trials=100,max_tries=100,alg="greedy",draw_freq=0,show_ecc=False):
@@ -457,13 +406,15 @@ for data_file in data_files:
         if ((line.split())[AWARENESS_COL] == '1'):
             awareness_graph.add_edge(int((line.split())[0]),int((line.split())[1]),weight=1.0)
     print(("Adding graphs ", data_file.name, "with ", len(contact_graph.nodes())," nodes and ", len(contact_graph.edges()), " edges"))
-    contact_graphs.append((contact_graph,data_file.name))
-    awareness_graphs.append((awareness_graph,data_file.name))
+    name = re.split(r'[`\-=~!@#$%^&*()_+\[\]{};\'\\:"|<,./<>?]', data_file.name)[3]
+    print(("Downloaded ",name))
+    contact_graphs.append((contact_graph,name))
+    awareness_graphs.append((awareness_graph,name))
 
 #Check graphs
 for g,name in contact_graphs:
     for x,y in g.edges():
-        assert(x in g.nodes() and x in g[y].keys() and y in g[x].keys())
+        assert(x in g.nodes() and x in list(g[y].keys()) and y in list(g[x].keys()))
 
             
 #close files
@@ -521,10 +472,14 @@ na
 
 
 #Take
-def plot_comp_results(graph_name,data1,data1name,data2,data2name,plt_name,plt_type='avg'):
+def plot_comp_results(all_data,plt_name,plt_type='avg',saveName=None,noNewFigure=False):
 
-    all_data = [(data1,data1name),(data2,data2name)]
-    plt.figure()
+    #all_data = [(data1,data1name),(data2,data2name)]
+    
+    for alg_name in all_data.keys():
+
+    if (noNewFigure == False):
+        plt.figure()
 
     #Aggregate data1 and data2
     if (plt_type.startswith('avg')):
@@ -555,11 +510,14 @@ def plot_comp_results(graph_name,data1,data1name,data2,data2name,plt_name,plt_ty
 
     #Create legend from data name entries
     #plt.legend(handles=[ entry[1] for entry in all_data])
+
     plt.title("Graph: %s" % graph_name)
     plt.legend()
     plt.xlabel("Iteration Count")
     plt.ylabel("Average Value of %s" % plt_name)
-
+    
+    if (saveName != None):
+        plt.savefig("plots/%s.png"%saveName,bbox_inches='tight')
     #plt.show()
 
 def list_local_bridges(G):
@@ -583,13 +541,13 @@ G_list = single_contact_networks_list
 #G_list = [(get_undirected_ER_graph(20,0.15),"er")]
 
 repeats = 1
-trials = 5
-iterations = 20
+trials = 20 #metrics
+iterations = 20 #degree dist
 frequency = 5
 COMMITTEE_SZ = 6
 COVERAGE_MIN = 0.9999
 CLOSURE_PARAM = 0.08
-max_tries = 25
+max_tries = 30
 
 
 print("Starting simulation")
@@ -602,210 +560,128 @@ rand_results = {}
 greedy_results = {}
 for z,graph_desc in enumerate(G_list):
 
-    if (z not in [0]):
+    if (z not in [4]):
         continue
 
     G,name = graph_desc
-    print("G=%s has" %name, len(G.nodes()), " nodes")
+    print(("G=%s has" %name, len(G.nodes()), " nodes"))
     G = nx.convert_node_labels_to_integers(G)
     data_greedy = []
     data_rand = []
     
     #repeat process several times, adding all times to one list
     for c in range(repeats):
-        print("Using greedy method")
+    for alg in alg_list:
+        print("Using %s method"%alg)
+        t,graphs,committee,covg,max_covg = get_distribution_coverage_time(G,COMMITTEE_SZ,COVERAGE_MIN,CLOSURE_PARAM,trials,max_tries,alg=alg,draw_freq=0,show_ecc=False)
 
-        #int(1.5*len(G.nodes()))/COMMITTEE_SZ,
-        t,graphs,committee,covg,max_covg = get_distribution_coverage_time(G,COMMITTEE_SZ,COVERAGE_MIN,CLOSURE_PARAM,trials,max_tries,alg="greedy",draw_freq=0,show_ecc=False)
-
-        data_greedy.append((t,graphs,covg,max_covg,committee))
+        data_set.append((t,graphs,covg,max_covg,committee,alg))
         #data_greedy.append(tuple(t,graphs) for t,graphs in get_distribution_coverage_time(G,COMMITTEE_SZ,COVERAGE_MIN,CLOSURE_PARAM,trials,max_tries=N/COMMITTEE_SZ,alg="greedy",draw_freq=1))
-        print("Using random method")
-        t,graphs,committee,covg,max_covg =  get_distribution_coverage_time(G,COMMITTEE_SZ,COVERAGE_MIN,CLOSURE_PARAM,trials,max_tries,alg="random",draw_freq=0,show_ecc=False)
-        data_rand.append((t,graphs,covg,max_covg,committee))
 
     #print "Data Greedy = " ,data_greedy
-    
-    #copy time distribution of convergence
-    time_dist_greedy = []
-    time_dist_rand = []
-  
-    rand_results[name] = {}
-    greedy_results[name] = {}
-    
-   
-    rand_results[name]['diameter'] = [] 
-    rand_results[name]['num_edges'] = [] 
-    rand_results[name]['coverage'] = [] 
-    rand_results[name]['max_coverage'] = [] 
-    rand_results[name]['max_second_coverage'] = [] 
-    rand_results[name]['clustering'] = [] 
-    rand_results[name]['local_bridges'] = [] 
-    rand_results[name]['committee'] = [] 
 
-    greedy_results[name]['diameter'] = [] 
-    greedy_results[name]['num_edges'] = [] 
-    greedy_results[name]['coverage'] = [] 
-    greedy_results[name]['max_coverage'] = [] 
-    greedy_results[name]['max_second_coverage'] = [] 
-    greedy_results[name]['clustering'] = [] 
-    greedy_results[name]['local_bridges'] = [] 
-    greedy_results[name]['committee'] = [] 
+    for data in data_set:
 
- 
-    #f = plt.figure("%s : greedy" % name)
-    #print "Greedy data",data_greedy
-    print("Calculating stats (greedy)")   
-    for x,record in enumerate(data_greedy):
-        #Save times
-        times = record[0]
-        time_dist_greedy = time_dist_greedy + times
+        #copy time distribution of convergence
+        time_dist = []
+        alg = data[-1] 
+        results[name] = {}
+        results[name][alg] = {}
         
-        #Record diameter trends
-        graph_trials = record[1]
+       
+        results[name][alg]['diameter'] = [] 
+        results[name][alg]['num_edges'] = [] 
+        results[name][alg]['coverage'] = [] 
+        results[name][alg]['max_coverage'] = [] 
+        results[name][alg]['max_second_coverage'] = [] 
+        results[name][alg]['clustering'] = [] 
+        results[name][alg]['local_bridges'] = [] 
+        results[name][alg]['committee'] = [] 
 
-        #Record committees
-        committee_lists = record[4]
+        print("Calculating stats (%s)"%alg)   
+        for x,record in enumerate(data):
 
-        for y,trial in enumerate(graph_trials):
-            diameter = []
-            edges = []
-            clustering = []
-            local_bridges = []
-            degrees = []
-            max_second_covg = []
-            #print "Checking graphs ", trial, "for trial" ,graph_trials
-            for i,graph in enumerate(trial):
-                #print "Graph edges",len(graph.edges())
-                diameter.append(nx.diameter(graph))
-                edges.append(len(graph.edges()))
-                clustering.append(nx.average_clustering(graph))
-                local_bridges.append(len(list_local_bridges(graph))/2)
-                
-                #Remove committee from graph and retry
-                committee = committee_lists[y][i]
-                #print "Coverage at time ",i,"of first set is ",covg, " and should be ",record[2][y][i]
-                G= graph.copy() 
-                for c in committee:
-                    G.remove_node(c)
-                G = nx.convert_node_labels_to_integers(G)
-                _,covg = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),COMMITTEE_SZ,1)
-                print(("Adding coverage value",covg))
-                max_second_covg.append(covg/len(G))
-                
-    
-                
-
-            greedy_results[name]['diameter'].append(diameter)
-            greedy_results[name]['num_edges'].append(edges)
-            greedy_results[name]['clustering'].append(clustering)
-            greedy_results[name]['local_bridges'].append(local_bridges)
-            greedy_results[name]['max_second_coverage'].append(max_second_covg)
-            
-
-        #Record coverage
-        greedy_results[name]['coverage'].append(record[2])
-        greedy_results[name]['max_coverage'].append(record[3])
-
-        #Record committee consistency
-        committee_lists = record[4]
-        for committee_list in committee_lists:
-            committee_remain= []
-            for i,committee in enumerate(committee_list):
-                if (i==0):
-                    continue
-                prev_committee = committee_list[i-1]
-                current_committee = committee
-                #Calc percent of current committee which changes over one round
-                committee_remain.append( 1.0 - (len(set(current_committee).difference(set(prev_committee)))/float(COMMITTEE_SZ)) )
-                
-            greedy_results[name]['committee'].append(committee_remain)
-            
-     
-    print(("Times recorded for greedy are ",time_dist_greedy))
-    
-    #plt.show()
-    
-    #f = plt.figure("%s : random" % name)
-    
-    print("Calculating stats (random)")   
-    for record in data_rand:
-        #Save times
-        times = record[0]
-        time_dist_rand = time_dist_rand + times
+            #Save times
+            times = record[0]
+            time_dist = time_dist + times
         
-        #Record diameter trends
-        graph_trials = record[1]
-        for trial in graph_trials:
-            diameter = []
-            edges = []
-            clustering = []
-            local_bridges = []
-            max_second_covg = []
-            for graph in trial:
-                diameter.append(nx.diameter(graph))
-                edges.append(len(graph.edges()))
-                clustering.append(nx.average_clustering(graph))
-                local_bridges.append(len(list_local_bridges(graph))/2)
+            #Record diameter trends
+            graph_trials = record[1]
 
-                #Remove committee from graph and retry
-                committee = committee_lists[y][i]
-                G= graph.copy() 
-                for c in committee:
-                    G.remove_node(c)
-                G = nx.convert_node_labels_to_integers(G)
-                _,covg = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),COMMITTEE_SZ,1)
-                max_second_covg.append(covg/len(G))
+            #Record committees
+            committee_lists = record[4]
+
+            for y,trial in enumerate(graph_trials):
+                diameter = []
+                edges = []
+                clustering = []
+                local_bridges = []
+                degrees = []
+                max_second_covg = []
+                print("Checking graphs in trial", trial)
+                for i,graph in enumerate(trial):
+                    #print "Graph edges",len(graph.edges())
+                    diameter.append(nx.diameter(graph))
+                    edges.append(len(graph.edges()))
+                    clustering.append(nx.average_clustering(graph))
+                    local_bridges.append(len(list_local_bridges(graph))/2)
+                    
+                    #Remove committee from graph and retry
+                    committee = committee_lists[y][i]
+                    #print "Coverage at time ",i,"of first set is ",covg, " and should be ",record[2][y][i]
+                    G= graph.copy() 
+                    for c in committee:
+                        G.remove_node(c)
+                    G = nx.convert_node_labels_to_integers(G)
+                    _,covg = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),COMMITTEE_SZ,1)
+                    #print(("Adding coverage value",covg))
+                    max_second_covg.append(covg/len(G))
+                    
+        
+                    
+
+                    results[name][alg]['diameter'].append(diameter)
+                    results[name][alg]['num_edges'].append(edges)
+                    results[name][alg]['clustering'].append(clustering)
+                    results[name][alg]['local_bridges'].append(local_bridges)
+                    results[name][alg]['max_second_coverage'].append(max_second_covg)
                 
 
-            rand_results[name]['diameter'].append(diameter)
-            rand_results[name]['num_edges'].append(edges)
-            rand_results[name]['clustering'].append(clustering)
-            rand_results[name]['local_bridges'].append(local_bridges)
-            rand_results[name]['max_second_coverage'].append(max_second_covg)
+            #Record coverage
+            results[name][alg]['coverage'].append(record[2])
+            results[name][alg]['max_coverage'].append(record[3])
 
-        #Record coverage
-        rand_results[name]['coverage'].append(record[2])
-        rand_results[name]['max_coverage'].append(record[3])
-
-
-        #Record committee consistency
-        committee_lists = record[4]
-        for committee_list in committee_lists:
-            committee_remain= []
-            for i,committee in enumerate(committee_list):
-                if (i==0):
-                    continue
-                prev_committee = committee_list[i-1]
-                current_committee = committee
-                #Calc percent of current committee which changes over one round
-                committee_remain.append( 1.0 - (len(set(current_committee).difference(set(prev_committee)))/float(COMMITTEE_SZ)) )
+            #Record committee consistency
+            committee_lists = record[4]
+            for committee_list in committee_lists:
+                committee_remain= []
+                for i,committee in enumerate(committee_list):
+                    if (i==0):
+                        continue
+                    prev_committee = committee_list[i-1]
+                    current_committee = committee
+                    #Calc percent of current committee which changes over one round
+                    committee_remain.append( 1.0 - (len(set(current_committee).difference(set(prev_committee)))/float(COMMITTEE_SZ)) )
+                    
+                results[name][alg]['committee'].append(committee_remain)
                 
-            rand_results[name]['committee'].append(committee_remain)
+         
+        print(("Times recorded for %s are "%alg,time_dist_greedy))
 
-    print(("Times recorded for random are ",time_dist_rand))
-    
-    #plt.legend(handles=[line_greedy, line_rand])
-    #plt.show()
+        #Plot data
+        for metric in plot_metrics:
+            plot_comp_results("%s - k=%i - closure=%.2f" %(name,COMMITTEE_SZ,CLOSURE_PARAM),results[name],'diameter',saveName="diameter-%s"%name,noNewFigure=True)
    
-    #print "Showing data raw"
-    #print greedy_results[name]
-    #print rand_results[name]
-    
 
-    plot_comp_results("%s - k=%i - closure=%.2f" %(name,COMMITTEE_SZ,CLOSURE_PARAM),greedy_results[name]['diameter'],'greedy',rand_results[name]['diameter'],'random','Diameter' )
-    plot_comp_results("%s - k=%i - closure=%.2f" %(name,COMMITTEE_SZ,CLOSURE_PARAM),greedy_results[name]['num_edges'],'greedy',rand_results[name]['num_edges'],'random','Num Edges')
-    plot_comp_results("%s - k=%i - closure=%.2f" %(name,COMMITTEE_SZ,CLOSURE_PARAM),greedy_results[name]['clustering'],'greedy',rand_results[name]['clustering'],'random','Average Contact Network Clustering Coefficient')
-    plot_comp_results("%s - k=%i - closure=%.2f" %(name,COMMITTEE_SZ,CLOSURE_PARAM),greedy_results[name]['coverage'][0],'greedy',rand_results[name]['coverage'][0],'random','Committee Coverage')
-    plot_comp_results("%s - k=%i - closure=%.2f" %(name,COMMITTEE_SZ,CLOSURE_PARAM),greedy_results[name]['max_coverage'][0],'greedy',rand_results[name]['max_coverage'][0],'random','Est. Max Committee Coverage')
-    plot_comp_results("%s - k=%i - closure=%.2f" %(name,COMMITTEE_SZ,CLOSURE_PARAM),greedy_results[name]['local_bridges'],'greedy',rand_results[name]['local_bridges'],'random','Local Bridges')
-    plot_comp_results("%s - k=%i - closure=%.2f" %(name,COMMITTEE_SZ,CLOSURE_PARAM),greedy_results[name]['committee'],'greedy',rand_results[name]['committee'],'random','Percent Remaining in Committee Between Rounds')
+"""
+
     plt.ylim([-0.1,1.1])
+        for alg in alg_list:
+            plot_comp_results("%s - k=%i - closure=%.2f" %(name,COMMITTEE_SZ,CLOSURE_PARAM),results[name][alg]['max_second_coverage'],'(greedy) second',greedy_results[name]['alg']['max_coverage'][0],'(greedy) first','(Greedy) Max vs Alt Coverage',saveName="first-second-greedy-%s"%name)
 
-    plot_comp_results("%s - k=%i - closure=%.2f" %(name,COMMITTEE_SZ,CLOSURE_PARAM),greedy_results[name]['max_second_coverage'],'(greedy) second',greedy_results[name]['max_coverage'][0],'(greedy) first','(Greedy) Max vs Alt Coverage')
-    plot_comp_results("%s - k=%i - closure=%.2f" %(name,COMMITTEE_SZ,CLOSURE_PARAM),rand_results[name]['max_second_coverage'],'(rand) second',rand_results[name]['max_coverage'][0],'(rand) first','(Rand) Max vs Alt Coverage')
-    break
-plt.show()
+"""
+print("Done")
+#plt.show()
 
 """
 
