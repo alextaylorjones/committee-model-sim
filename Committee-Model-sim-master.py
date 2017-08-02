@@ -1,4 +1,5 @@
 #!/usr/bin/python
+CAN_PLOT = True
 import networkx as nx
 import re
 import pickle
@@ -7,12 +8,17 @@ import math
 import numpy as np
 import random as rand
 import copy
-import matplotlib.pyplot as plt
+
+if (CAN_PLOT):
+    import matplotlib.pyplot as plt
+
 import scipy
 from itertools import combinations as comb
 from io import open
+
 #constants
-SEED=4
+SEED=10
+
 run_id = str(np.random.rand())
 np.random.seed(SEED)
 
@@ -118,6 +124,46 @@ def construct_awareness_from_contact_graph(G):
             assert(H[x][y]['weight'] >= 0 and H[x][y]['weight'] <= 1.0)
     
     return H
+"""
+def construct_awareness_from_contact_graph(G):
+    H = G.copy()
+    #print "Edges",H.edges()
+    for pair in comb(G.nodes(),2): #get pairs
+        x = pair[0]
+        y = pair[1]
+       
+        metric = 0.0
+        if (y in G[x]):#if y a neighor of x (and visa versa)
+            metric = 0.5
+            
+        #JS Metric
+        xNbr = set(G[x])
+        yNbr = set(G[y])
+        
+        #if one has no neighbors
+        if (len(xNbr) == 0 or len(yNbr) == 0):
+            H.add_edge(x,y,weight=metric)
+            continue
+            
+        mutualNbrs = xNbr.intersection(yNbr)
+        
+        #special case of isolated dyad
+        if (xNbr == set([y]) and yNbr == set([x])):
+            metric = 1.0
+        else:
+            metric = metric + 0.5*(1 - AWARENESS_COEFFICIENT_ALPHA*math.exp(-1.0*AWARENESS_COEFFICIENT_BETA*len(mutualNbrs)))
+        assert(metric >= 0.0 and metric <= 1.0) 
+        #set as edge weight in new graph
+        if (y not in H[x] and metric > 0.0):
+            H.add_edge(x,y)
+        if (metric > 0.0):
+            H[x][y]['weight'] = metric
+
+            assert(H[x][y]['weight'] >= 0 and H[x][y]['weight'] <= 1.0)
+    
+        
+    return H
+"""
 #Calculate the expected number of neighbors of S in V(G), not including S itself
 def get_exp_coverage(G,S):
     #Coverage probabilities of
@@ -137,7 +183,6 @@ def get_exp_coverage(G,S):
     #return the sum of all of the coverage weights
 
     return sum(covg)
-
 def get_t_step_opt_committee(G_contact,t,k,closure_param):
     G = G_contact
     #Find larger committee
@@ -265,6 +310,121 @@ def greedy_expected_max_coverage_set(G,t,k):
 
 ## Close each triplet with at least one node in committee according to threshold
 ## Close all triads which have one edge in committee
+
+def get_overlap_committee(G,k,p1,p2,p3):
+
+    #Get committee pt1 -high coverage core
+    if (p1 > 0):
+        committee1,covg = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),p1,1)
+        committee = set(committee1)
+    else:
+        committee = set()
+        covg = 0
+
+    print "Coverage of graph is ",covg, " by high coverage core of size ",p1
+
+    print "Committee 1:", committee1
+    
+    #Get contact diversity
+    nbrs = []
+    for c in committee1:
+        nbrs = nbrs + list(G[c].keys())
+    nbrs = set(nbrs)
+    remaining = set(G.nodes()).difference(nbrs)
+    committee2 = []
+    for i in range(p2):
+        last_node = None
+        max_nbrs_size = -1
+        print "Size of remaining contact neighborhood is ",len(remaining), "out of ",len(G.nodes())," after ", i," members of diversity set"
+        for x in set(G.nodes()).difference(committee):
+            nbrs_size = len(set(list(G[x].keys())).intersection(remaining))
+            if (nbrs_size > max_nbrs_size):
+                max_nbrs_size = nbrs_size
+                last_node = x
+
+        if (max_nbrs_size < MIN_DIVERSITY_THRESHOLD*len(G.nodes())):
+            print "Max covered neighbors was ",max_nbrs_size, "less than required", (MIN_DIVERSITY_THRESHOLD*len(G.nodes()))
+            break
+
+
+        remaining = remaining.difference(list(G[last_node].keys()))
+    
+        committee2.append(last_node)
+
+
+        #add 2nd committee
+        committee = committee.union(set([last_node]))
+    if (len(committee2) == p2):
+        print "Size of remaining contact neighborhood is ",len(remaining), "out of ",len(G.nodes())," after ", p2," members of diversity set"
+    else:
+        print "Diversity contact set is below useful threshold, adding high coverage nodes instead"
+        r = p2-len(committee2)
+        committee1,_ = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),p1+r,1)
+        committee = committee1.union(committee2)
+
+    print "Committee 2:", committee2    
+    assert(len(committee) == (p1 + p2))
+
+    #Get one and two hop neighborhoods of committee pt1 and pt2
+    one_hop_neighbors = []
+    two_hop_neighbors = []
+    for c in committee:
+        one_hop_neighbors = one_hop_neighbors + list(G[c].keys())
+        for d in G[c].keys():
+            two_hop_neighbors = two_hop_neighbors + list(G[d].keys())
+
+    #rename and make sets to make unique
+    one_hop_neighbors = set(one_hop_neighbors)
+    two_hop_neighbors = set(two_hop_neighbors).difference(one_hop_neighbors)
+
+    #Find set of size p3 which overlaps the two hop neighborhood as much as possible
+    committee3 = []
+    
+    for i in range(p3):
+        #initialize coverage
+        covg = [0 for _ in G.nodes()]
+        print "In glue set, two hop neighborhood is size ",len(two_hop_neighbors), "after ",i,"memebers of glue set"
+
+        #Find nodes outside the committee
+        for v in set(G.nodes()).difference(committee):
+            #find the number of neighbors of these nodes which are inside the two_hop_neighborhood
+            covg[v] = len(set(G[v].keys()).intersection(two_hop_neighbors))
+
+
+        max_covg = max(covg)
+        #If glue is not useful enough
+        if (max_covg < MIN_GLUE_COVG_THRESHOLD*len(G.nodes())):
+            break
+
+        max_covg_node = covg.index(max_covg)       
+ 
+        committee3.append(max_covg_node)
+
+        #add max coverage node
+        committee = committee.union(set([max_covg_node]))
+
+        #remove covered nodes in 2hop neighborhood by new node
+        
+        two_hop_neighbors = two_hop_neighbors.difference(set(list(G[max_covg_node].keys())))
+    
+    if (len(committee3) == p3):
+        print "In glue set, two hop neighborhood is size ",len(two_hop_neighbors), "after ",p3,"memebers of glue set"
+    else:
+        print "Glue set did not pass threshold, adding random nodes instead"
+        r = p3 - len(committee3)
+        #Get unique random set outside committee
+        c = np.random.choice(list(set(G.nodes()).difference(committee)),r)
+        while (len(c) != len(set(c))):
+            c = np.random.choice(list(set(G.nodes()).difference(committee)),r)
+            
+
+        committee = committee.union(set(c))
+            
+                      
+    assert(len(committee) == k)
+    covg = get_exp_coverage(construct_awareness_from_contact_graph(G),committee)
+ 
+    return committee,covg
 
 def committee_closure_augmentation(G,committee,closure_threshold):
     H = G.copy()
@@ -459,50 +619,23 @@ def get_distribution_coverage_time(G_init,k,alpha,closure_param,trials=100,max_t
                 max_committee_coverage[-1].append(covg/float(num_nodes))
         elif (alg.startswith("overlap")):
              #recover step size
-            #overlap-k1-k2
-            step_sz_1 = int(re.split("-",alg))[1]
-            step_sz_2 = int(re.split("-",alg))[2]
-            step_sz_3 = int(re.split("-",alg))[3]
+            #overlap-k1-k2-k3
+            p1 = int((re.split("-",alg))[1])
+            p2 = int((re.split("-",alg))[2])
+            p3 = int((re.split("-",alg))[3])
 
-            assert(step_sz_1 + step_sz_2 + step_sz_3 == k) 
+            assert(p1 + p2 + p3 == k) 
 
             _,max_covg = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),k,1)
-            max_committee_coverage[-1].append(covg/float(num_nodes))
-            #Get committee pt1 -high coverage core
-            committee1,_ = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),step_sz_1,1)
-
-            #Get contact diversity
-            nbrs = []
-            for c in committee1:
-                nbrs = nbrs + list(G[c].keys())
-            nbrs = set(nbrs)
-            remaining = set(G.nodes()).difference(nbrs)
-
-            last_node = None
-            max_nbrs_size = -1
-
-            for x in set(G.nodes()).difference(committee):
-                nbrs_size = len(set(list(G[x].keys())).intersection(remaining))
-                if (nbrs_size > max_nbrs_size):
-                    max_nbrs_size = nbrs_size
-                    last_node = x
-
-
-            committee = committee.union(set([last_node]))
-            covg = get_exp_coverage(G,committee)
+            max_committee_coverage[-1].append(max_covg/float(num_nodes))
             
-
-            #Get one and two hop neighborhoods of committee pt1
-            one_hops_nbrs = []
-            two_hops_nbrs = []
-            for c in committee:
-                one_hops_nbrs = one_hops_nbrs + list(G[c].keys())
-                for d in G[c].keys():
-                    two_hops_nbrs = two_hops_nbrs + list(G[d].keys())
-
-            #Find 
+            #Get high coverage core of size p1 
+            #diversifying set of size p2
+            #and "glue" set of size p3
+            committee,covg = get_overlap_committee(G,k,p1,p2,p3)
 
             committee_coverage[-1].append(covg/float(num_nodes))
+
             committees[-1].append(committee)
 
 
@@ -536,11 +669,15 @@ def get_distribution_coverage_time(G_init,k,alpha,closure_param,trials=100,max_t
                     plt.show()
                 
                 tries += 1
-             
-                committee,covg = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),k,1)
-                committees[-1].append(committee)
+
+                _,max_covg = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),k,1)
+                max_committee_coverage[-1].append(max_covg/float(num_nodes))
+                
+                committee,covg = get_overlap_committee(G,k,p1,p2,p3)
+
                 committee_coverage[-1].append(covg/float(num_nodes))
-                max_committee_coverage[-1].append(covg/float(num_nodes))
+
+                committees[-1].append(committee)
 
         elif (alg.startswith("step")):
             #t-step coverage algorithm
@@ -611,7 +748,7 @@ def get_distribution_coverage_time(G_init,k,alpha,closure_param,trials=100,max_t
             
             committees[-1].append(committee)
                     
-            covg = get_exp_coverage(G,committee)
+            covg = get_exp_coverage(construct_awareness_from_contact_graph(G),committee)
 
 
             committee_coverage[-1].append(covg/float(num_nodes))
@@ -671,19 +808,8 @@ def get_distribution_coverage_time(G_init,k,alpha,closure_param,trials=100,max_t
 
                 committees[-1].append(committee)
 
-                covg = get_exp_coverage(G,committee)
+                covg = get_exp_coverage(construct_awareness_from_contact_graph(G),committee)
                 committee_coverage[-1].append(covg/float(num_nodes))
-        elif (alg.startswith("opt")):
-            opt_committees,opt_graphs = get_opt_committees(G,k,closure_param,max_tries)
-            committees[-1] = opt_committees
-            graphs[-1] = opt_graphs
-             
-            for G in opt_graphs:
-                max_committee_coverage[-1].append(greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),k,1))
-
-            tries = max_tries
-
-
         
         if (covg < alpha*(len(G.nodes()))):
             print(("ERROR: Coverage was %f, not high enough after Max tries= %i exceeded" % (covg,max_tries)))
@@ -798,8 +924,8 @@ def plot_comp_results(plt_name,all_data,metric_name,plt_type='avg',saveName=None
 
     if (plt_type.startswith('avg')):
  
-        plt.figure()
-
+        fig = plt.figure()
+        fig.set_size_inches(12,12) 
        
         for alg_name in alg_list: 
             print(("Plotting for alg",alg_name, " tracking metric",metric_name))
@@ -857,28 +983,68 @@ def list_local_bridges(G):
 
 G_list = single_contact_networks_list
 
-alg_list= ['greedy-diverse','greedy','random']
+#alg_list= ['overlap-3-1-0','overlap-1-3-0','overlap-2-1-1','overlap-4-0-0','random']
+alg_list = ['overlap-4-1-1','random']
 
-metric_list = ['diameter','num_edges','coverage',  'max_coverage','max_second_coverage','clustering','local_bridges','committee']
+metric_list = ['contact_diameter','awareness_diameter' , 'avg_awareness_path', 'avg_contact_path','num_edges','coverage',  'max_coverage','max_second_coverage','clustering','local_bridges','committee']
 
-trials = 15
-COMMITTEE_SZ = 5
+trials = 4
+COMMITTEE_SZ = 6
 COVERAGE_MIN = 1.0
 CLOSURE_PARAM = 0.05
-max_tries = 30
+max_tries = 20
 
 #for t-step lookahead
 sample_count = 12
+#for overlap
+MIN_GLUE_COVG_THRESHOLD = 0.05
+MIN_DIVERSITY_THRESHOLD = 0.03
+
+#for awareness
+AWARENESS_COEFFICIENT_ALPHA = 1.0
+AWARENESS_COEFFICIENT_BETA = 0.05
 
 print("Starting simulation")
 print(("Coverage minimum fraction %.3f, committee size %i and closure prob %.2f" % (COVERAGE_MIN,COMMITTEE_SZ,CLOSURE_PARAM)))
 
-plt.rcParams.update({'font.size': 14})
+if (CAN_PLOT):
+    plt.rcParams.update({'font.size': 14})
 
 #load results
 
 #Store result
 results = {}
+fileLoad = False
+#Load first file in results folder
+
+for filename in ld("./results/"):
+    if (filename.endswith("pickled")):
+        f = open("results/%s"%filename,'rb')
+        results = pickle.load(f)
+        f.close()
+        fileLoad = True
+        print "Loading results from file",filename
+        
+        split_name_list = re.split("-",filename)
+        #format results-%s-k=%i-closure=%.2f-sample_count=%i-pickled" %(name,COMMITTEE_SZ,CLOSURE_PARAM,sample_count)
+        committee = split_name_list[2]
+        COMMITTEE_SZ = int(re.split("=",committee)[1])
+        
+        closure = split_name_list[3]
+        CLOSURE_PARAM = float(re.split("=",closure)[1])
+    
+        sample = split_name_list[4]
+        CLOSURE_PARAM = int(re.split("=",sample)[1])
+
+        for name in results.keys():
+            print "Using results with name ",name
+            for metric in metric_list:
+                plot_comp_results("%s - k=%i - closure=%.2f - sample count %i" %(name,COMMITTEE_SZ,CLOSURE_PARAM,sample_count),results[name],metric,saveName="%s-%s"%(metric,name))
+
+        
+if (fileLoad == True):
+    print "Finished loading all files, exiting"
+    quit()    
 
 for z,graph_desc in enumerate(G_list):
     if (z not in [4]):
@@ -886,15 +1052,16 @@ for z,graph_desc in enumerate(G_list):
     G,name = graph_desc
     print(("G=%s has" %name, len(G.nodes()), " nodes"))
     G = nx.convert_node_labels_to_integers(G)
+
     data_set = []
-    
+    results[name] = {}
+
     #repeat process several times, adding all times to one list
     for alg in alg_list:
         print(("Using %s method"%alg))
         t,graphs,committee,covg,max_covg = get_distribution_coverage_time(G,COMMITTEE_SZ,COVERAGE_MIN,CLOSURE_PARAM,trials,max_tries,alg=alg,draw_freq=0,show_ecc=False)
         data_set.append((t,graphs,covg,max_covg,committee,alg))
 
-    results[name] = {}
 
     #Post process graphs
     for data in data_set:
@@ -905,7 +1072,10 @@ for z,graph_desc in enumerate(G_list):
         alg = data[-1] 
         results[name][alg] = {}
 
-        results[name][alg]['diameter'] = [] 
+        results[name][alg]['contact_diameter'] = [] 
+        results[name][alg]['awareness_diameter'] = [] 
+        results[name][alg]['avg_contact_path'] = [] 
+        results[name][alg]['avg_awareness_path'] = [] 
         results[name][alg]['num_edges'] = [] 
         results[name][alg]['coverage'] = [] 
         results[name][alg]['max_coverage'] = [] 
@@ -927,7 +1097,10 @@ for z,graph_desc in enumerate(G_list):
         committee_lists = data[4]
 
         for y,trial in enumerate(graph_trials):
-            diameter = []
+            contact_diameter = []
+            awareness_diameter = []
+            avg_contact_path = []
+            avg_awareness_path = []
             edges = []
             clustering = []
             local_bridges = []
@@ -935,23 +1108,53 @@ for z,graph_desc in enumerate(G_list):
             max_second_covg = []
             for i,graph in enumerate(trial):
                 #print "Graph edges",len(graph.edges())
-                diameter.append(nx.diameter(graph))
+                contact_path_lengths_dict = nx.all_pairs_shortest_path_length(graph)
+                awareness_path_lengths_dict = nx.all_pairs_shortest_path_length(construct_awareness_from_contact_graph(graph))
+
+                contact_path_lengths = []
+                awareness_path_lengths = []
+                
+                for k in contact_path_lengths_dict.keys():
+                    sp_dict = contact_path_lengths_dict[k]
+                    for x in sp_dict.values():
+                        contact_path_lengths.append(x)
+
+                for k in awareness_path_lengths_dict.keys():
+                    sp_dict = awareness_path_lengths_dict[k]
+                    for x in sp_dict.values():
+                        awareness_path_lengths.append(x)
+
+
+                #print "Contact paths", contact_path_lengths
+                #print "Awareness paths paths", awareness_path_lengths
+                
+                contact_diameter.append(max(contact_path_lengths))
+                awareness_diameter.append(max(awareness_path_lengths))
+                 
+                avg_contact_path.append(sum(list(contact_path_lengths))/float(len(contact_path_lengths)))
+                avg_awareness_path.append(sum(list(awareness_path_lengths))/float(len(awareness_path_lengths)))
+            
                 edges.append(len(graph.edges()))
+
                 clustering.append(nx.average_clustering(graph))
                 local_bridges.append(len(list_local_bridges(graph))/2)
                 
                 #Remove committee from graph and retry
                 committee = committee_lists[y][i]
                 #print "Coverage at time ",i,"of first set is ",covg, " and should be ",record[2][y][i]
-                G= graph.copy() 
+                G = graph.copy() 
                 for c in committee:
                     G.remove_node(c)
                 G = nx.convert_node_labels_to_integers(G)
                 _,covg = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),COMMITTEE_SZ,1)
+
                 #print(("Adding coverage value",covg))
                 max_second_covg.append(covg/len(G))
-
-                results[name][alg]['diameter'].append(diameter)
+                
+                results[name][alg]['contact_diameter'].append(contact_diameter)
+                results[name][alg]['awareness_diameter'].append(awareness_diameter)
+                results[name][alg]['avg_awareness_path'].append(avg_awareness_path)
+                results[name][alg]['avg_contact_path'].append(avg_contact_path)
                 results[name][alg]['num_edges'].append(edges)
                 results[name][alg]['clustering'].append(clustering)
                 results[name][alg]['local_bridges'].append(local_bridges)
@@ -976,18 +1179,19 @@ for z,graph_desc in enumerate(G_list):
                     
                 results[name][alg]['committee'].append(committee_remain)
           
-
     print("Results:")
-    #Plot data
-    for metric in metric_list:
-        plot_comp_results("%s - k=%i - closure=%.2f - sample count %i" %(name,COMMITTEE_SZ,CLOSURE_PARAM,sample_count),results[name],metric,saveName="%s-%s"%(metric,name))
+    if (CAN_PLOT):
+        #Plot data
+        for metric in metric_list:
+            plot_comp_results("%s - k=%i - closure=%.2f - sample count %i" %(name,COMMITTEE_SZ,CLOSURE_PARAM,sample_count),results[name],metric,saveName="%s-%s"%(metric,name))
 
 
     #Save files
     mkdir_p("results")
-    with open("results/results-%s-k=%i-closure=%.2f-sample_count=%i.txt" %(name,COMMITTEE_SZ,CLOSURE_PARAM,sample_count),'wb') as fp:
+    with open("results/results-%s-k=%i-closure=%.2f-sample_count=%i-pickled" %(name,COMMITTEE_SZ,CLOSURE_PARAM,sample_count),'wb') as fp:
+        print "Dumping results-%s-k=%i-closure=%.2f-sample_count=%i-pickled" %(name,COMMITTEE_SZ,CLOSURE_PARAM,sample_count)
         pickle.dump(results,fp)
-
+       
     #plt.ylim([-0.1,1.1])
     #for alg in alg_list:
     #        plot_comp_results("%s - k=%i - closure=%.2f" %(name,COMMITTEE_SZ,CLOSURE_PARAM),results[name][alg]['max_second_coverage'],'(greedy) second',greedy_results[name]['alg']['max_coverage'][0],'(greedy) first','(Greedy) Max vs Alt Coverage',saveName="first-second-greedy-%s"%name)

@@ -1,4 +1,4 @@
-#!/usr/bin/python
+        #!/usr/bin/python
 import networkx as nx
 import collections
 import math
@@ -20,8 +20,8 @@ def get_mutual_contact_density(G,x,y):
         print "No contacts for  pair",x,y
         return 1.0
 
-    return float(len(xNbr.intersection(yNbr)))/float(len(xNbr.union(yNbr)))
-    #return float(len(xNbr.intersection(yNbr)))
+    #return float(len(xNbr.intersection(yNbr)))/float(len(xNbr.union(yNbr)))
+    return float(len(xNbr.intersection(yNbr)))
 
 if __name__=="__main__":
     CONTACT_COL = 4 #indexed from 0
@@ -106,11 +106,10 @@ if __name__=="__main__":
         print "\t Pr(MR|dis <= 2)",float(sum(prob_mr_lt2))/len(prob_mr_lt2), " (num= ",sum(prob_mr_lt2), "with ", len(prob_mr_lt2), "total pairs"
         print "\t Pr(MR|dis >= 3)",float(sum(prob_mr_ge3))/len(prob_mr_ge3), " (num= ",sum(prob_mr_ge3), "with ", len(prob_mr_ge3), "total pairs"
 
-    assert(0)
 
     #end load data
-    bucket_width = .03
-    X = np.arange(0.0,1,bucket_width)
+    bucket_width = 1
+    X = np.arange(0.0,50,bucket_width)
 
     Y1 = [[] for _ in X]
     Y2 = [[] for _ in X]
@@ -247,11 +246,11 @@ if __name__=="__main__":
 
     #Average resutls
     for i in range(len(X)):
-        if (len(Y1[i]) > 3):
+        if (len(Y1[i]) > 1):
             Y1[i] = float(sum(Y1[i]))/float(len(Y1[i]))
         else:
             Y1[i] = None
-        if (len(Y2[i]) > 20):
+        if (len(Y2[i]) > 1):
             Y2[i] = float(sum(Y2[i]))/float(len(Y2[i]))
         else:
             Y2[i] = None
@@ -274,10 +273,10 @@ if __name__=="__main__":
     plt.xlabel("Fraction of i or j Contacts That Are Mutual")
     plt.ylabel("Likelihood of (i,j) Awareness Edge")
     plt.plot(X,Y1,'bo',label="dis(i,j) = 1")
-    plt.plot(X,[(0.5 + 0.5*x) for x in X],'--',color='b',label="JS ideal, dis(i,j) = 1")
+    #plt.plot(X,[(0.5 + 0.5*x) for x in X],'--',color='b',label="JS ideal, dis(i,j) = 1")
 
     plt.plot(X,Y2,'r^',label="dis(i,j) = 2")
-    plt.plot(X,[(0.5*x) for x in X],'--',color='r',label="JS ideal, dis(i,j) = 2")
+    #plt.plot(X,[(0.5*x) for x in X],'--',color='r',label="JS ideal, dis(i,j) = 2")
     plt.legend()
 
 
