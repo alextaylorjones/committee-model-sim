@@ -323,6 +323,7 @@ def get_distribution_coverage_time(G_init,k,alpha,closure_param,trials=100,max_t
 
         pos = None
         tries = 0
+            
         if (alg.startswith("greedy-diverse")):
             #Greedy coverage algorithm
             _,max_covg = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),k,1)
@@ -456,6 +457,91 @@ def get_distribution_coverage_time(G_init,k,alpha,closure_param,trials=100,max_t
                 committees[-1].append(committee)
                 committee_coverage[-1].append(covg/float(num_nodes))
                 max_committee_coverage[-1].append(covg/float(num_nodes))
+        elif (alg.startswith("overlap")):
+             #recover step size
+            #overlap-k1-k2
+            step_sz_1 = int(re.split("-",alg))[1]
+            step_sz_2 = int(re.split("-",alg))[2]
+            step_sz_3 = int(re.split("-",alg))[3]
+
+            assert(step_sz_1 + step_sz_2 + step_sz_3 == k) 
+
+            _,max_covg = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),k,1)
+            max_committee_coverage[-1].append(covg/float(num_nodes))
+            #Get committee pt1 -high coverage core
+            committee1,_ = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),step_sz_1,1)
+
+            #Get contact diversity
+            nbrs = []
+            for c in committee1:
+                nbrs = nbrs + list(G[c].keys())
+            nbrs = set(nbrs)
+            remaining = set(G.nodes()).difference(nbrs)
+
+            last_node = None
+            max_nbrs_size = -1
+
+            for x in set(G.nodes()).difference(committee):
+                nbrs_size = len(set(list(G[x].keys())).intersection(remaining))
+                if (nbrs_size > max_nbrs_size):
+                    max_nbrs_size = nbrs_size
+                    last_node = x
+
+
+            committee = committee.union(set([last_node]))
+            covg = get_exp_coverage(G,committee)
+            
+
+            #Get one and two hop neighborhoods of committee pt1
+            one_hops_nbrs = []
+            two_hops_nbrs = []
+            for c in committee:
+                one_hops_nbrs = one_hops_nbrs + list(G[c].keys())
+                for d in G[c].keys():
+                    two_hops_nbrs = two_hops_nbrs + list(G[d].keys())
+
+            #Find 
+
+            committee_coverage[-1].append(covg/float(num_nodes))
+            committees[-1].append(committee)
+
+
+            print("T=0")
+            if (draw_freq != 0):
+                pos = draw_graph_helper(G,"spring",pos)
+            graphs[-1].append(G)
+            
+                            #if showing eccentricities
+            if (show_ecc):
+                ecc_dict = nx.eccentricity(G)
+                plt.hist(list(ecc_dict.values()),bins=list(range(max(ecc_dict.values())+2)))
+                plt.title("Iteration 0 of Greedy Committee Formation:\n Contact Network Eccentricity Distribution")
+                plt.show()
+            
+            while (covg < alpha*num_nodes and tries < max_tries):
+                G = committee_closure_augmentation(G,committee,closure_param)
+                graphs[-1].append(G)
+            
+                #print "T=%i" % (tries+1)
+                
+                #draw according to frequency
+                if (draw_freq != 0 and (tries+1) % draw_freq == 0):
+                    pos = draw_graph_helper(G,"spring",pos)
+                
+                #if showing eccentricities
+                if (show_ecc):
+                    ecc_dict = nx.eccentricity(G)
+                    plt.hist(list(ecc_dict.values()),bins=list(range(max(ecc_dict.values())+2)))
+                    plt.title("Iteration %i of Greedy Committee Formation:\n Contact Network Eccentricity Distribution" % (tries+1))
+                    plt.show()
+                
+                tries += 1
+             
+                committee,covg = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),k,1)
+                committees[-1].append(committee)
+                committee_coverage[-1].append(covg/float(num_nodes))
+                max_committee_coverage[-1].append(covg/float(num_nodes))
+
         elif (alg.startswith("step")):
             #t-step coverage algorithm
 
