@@ -354,19 +354,21 @@ def get_overlap_committee(G,k,p1,p2):
                 if (nbrs_size > max_nbrs_size):
                     max_nbrs_size = nbrs_size
                     last_node = x
-
             total_nbrs_size += max_nbrs_size
 
-            if (max_nbrs_size < MIN_DIVERSITY_THRESHOLD*len(G.nodes())):
-                print(("Max covered neighbors was ",max_nbrs_size, "less than required", (MIN_DIVERSITY_THRESHOLD*len(G.nodes()))))
+            print("max neighbors in iteration ",i, " is ",max_nbrs_size)
+            if (total_nbrs_size/float(i) < MIN_DIVERSITY_THRESHOLD*len(G.nodes())):
+                print(("Average covered neighbors was ",total_nbrs_size/float(i), " from ", i, " diversity nodes less than required", (MIN_DIVERSITY_THRESHOLD*len(G.nodes()))))
                 filledFlag = False
                 #resize committees
-                p1 = p1 + (p2 - i+1)
-                p2 = i -1
+                p1 = p1 + 1
+                p2 = p2 - 1 
 
                 #get new hig coverage committee committee
                 #print(("Diversity committee failed to reach threshold at iteration ",i," out of ", p2, "getting new high coverage committee with ", p1, "total nodes, then getting new diversity committee with ",p2, "nodes"))
                 committee1,_ = greedy_expected_max_coverage_set(construct_awareness_from_contact_graph(G),p1,1)
+                #reset committee
+                committee = set(committee1)
                 #print(("Committee 1:",committee1))
                 #print(("Committee 2:",committee2))
                 break
@@ -1025,21 +1027,21 @@ G_list = single_contact_networks_list
 
 #alg_list= ['overlap-3-1-0','overlap-1-3-0','overlap-2-1-1','overlap-4-0-0','random']
 #alg_list = ['random']
-alg_list = ['diversity-4-2']
+alg_list = ['diversity-3-3','random']
 
 metric_list = ['contact_diameter','awareness_diameter' , 'avg_awareness_path', 'avg_contact_path','num_edges','coverage',  'max_coverage','max_second_coverage','clustering','local_bridges','committee']
 
-trials = 6
+trials = 20
 COMMITTEE_SZ = 6
 COVERAGE_MIN = 1.0
 CLOSURE_PARAM = 0.05
-max_tries = 30
+max_tries = 25
 
 #for t-step lookahead
 sample_count = 10
 #for overlap
 MIN_GLUE_COVG_THRESHOLD = 0.01
-MIN_DIVERSITY_THRESHOLD = 0.02
+MIN_DIVERSITY_THRESHOLD = 0.025
 
 #for awareness
 AWARENESS_COEFFICIENT_ALPHA = 1.0
@@ -1088,7 +1090,7 @@ if (fileLoad == True):
     quit()    
 
 for z,graph_desc in enumerate(G_list):
-    if (z not in [2]):
+    if (z not in [5]):
         continue 
     G,name = graph_desc
     print(("G=%s has" %name, len(G.nodes()), " nodes"))
