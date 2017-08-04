@@ -109,7 +109,7 @@ if __name__=="__main__":
 
     #end load data
     bucket_width = 1
-    X = np.arange(0.0,50,bucket_width)
+    X = np.arange(0.0,100,bucket_width)
 
     Y1 = [[] for _ in X]
     Y2 = [[] for _ in X]
