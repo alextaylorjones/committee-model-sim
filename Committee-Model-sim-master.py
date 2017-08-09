@@ -17,7 +17,7 @@ from itertools import combinations as comb
 from io import open
 
 #constants
-SEED=20
+SEED=42
 
 run_id = unicode(np.random.rand())
 np.random.seed(SEED)
@@ -60,18 +60,18 @@ def get_powerlaw_tree_graph(nodeNum,gamma):
 
 #Graph helper functions
 
-def draw_graph_helper(H,positionFlag=u"spring",drawNodeLabels=False,drawEdgeLabels=False,pos=None):
-    
+def draw_graph_helper(H,positionFlag=u"spring",drawNodeLabels=True,drawEdgeLabels=False,pos=None):
+    print "Edges:",H.edges() 
     if (positionFlag.startswith(u"spring") and pos==None):
         pos=nx.spring_layout(H,iterations=20)
     if (positionFlag.startswith(u"random") and pos==None):
         pos=nx.random_layout(H)
     plt.figure(figsize=(20,20))
     
-    nx.draw_networkx_nodes(H,pos,node_color=u'k',alpha=0.8, node_shape=u'o')
+    nx.draw_networkx_nodes(H,pos,node_color=u'k',alpha=0.3, node_shape=u'o')
     nx.draw_networkx_edges(H,pos)
     if (drawNodeLabels):
-        nx.draw_networkx_labels(H,pos,fontsize=12)
+        nx.draw_networkx_labels(H,pos,fontsize=14)
     labels = nx.get_edge_attributes(H,u'weight')
     labelsNonZero = {}
     for l in list(labels.keys()):
@@ -466,10 +466,12 @@ def committee_closure_augmentation(G,committee,closure_threshold):
                 r = rand.random()
                 if (r<closure_threshold):
                     H.add_edge(n,y,weight=1)
-            elif (y not in G[x]): #unclosed triad missing edge n-x
+                    print "New edge", n,y
+            if (y not in G[x]): #unclosed triad missing edge n-x
                 r = rand.random()
                 if (r<closure_threshold):
                     H.add_edge(n,x,weight=1)
+                    print "New edge", n,x
 
     u"""
     #Close triads in which the center is a neighbor 
@@ -677,11 +679,7 @@ def get_distribution_coverage_time(G_init,k,alpha,closure_param,trials=100,max_t
 
             print u"T=0"
             if (draw_freq != 0):
-                H = construct_awareness_from_contact_graph(G)
-                for i,j in H.edges():
-                    if (H[i][j][u'weight'] < 0.25):
-                        H.remove_edge(i,j)
-                pos = draw_graph_helper(H,u"spring",pos)
+                pos = draw_graph_helper(G,u"spring",pos=pos)
 
 
             graphs[-1].append(G)
@@ -701,11 +699,7 @@ def get_distribution_coverage_time(G_init,k,alpha,closure_param,trials=100,max_t
                 
                 #draw according to frequency
                 if (draw_freq != 0 and (tries+1) % draw_freq == 0):
-                    H = construct_awareness_from_contact_graph(G)
-                    for i,j in H.edges():
-                        if (H[i][j][u'weight'] < 0.25):
-                            H.remove_edge(i,j)
-                    pos = draw_graph_helper(H,u"spring")
+                    pos = draw_graph_helper(G,u"spring",pos=pos)
 
                 #if showing eccentricities
                 if (show_ecc):
@@ -1029,19 +1023,49 @@ def list_local_bridges(G):
 
 
 
-G_list = single_contact_networks_list
+#G_list = single_contact_networks_list
+
+def get_example_network(ID):
+    if (ID == 0):
+        G = nx.Graph()
+        G.add_edge(1,3)
+        G.add_edge(3,-3)
+        G.add_edge(1,4)
+        G.add_edge(4,-4)
+        G.add_edge(1,5)
+        G.add_edge(5,-5)
+        G.add_edge(1,7)
+        G.add_edge(7,-7)
+        G.add_edge(2,8)
+        G.add_edge(8,-8)
+        G.add_edge(2,9)
+        G.add_edge(9,-9)
+        G.add_edge(2,10)
+        G.add_edge(2,11)
+        G.add_edge(2,12)
+        G.add_edge(10,-10)
+        G.add_edge(11,-11)
+        G.add_edge(12,-12)
+        G.add_edge(2,14)
+        G.add_edge(14,-14)
+
+        return G
+
+G_list = [(get_example_network(0), "Example 0")]
+
+
 
 #alg_list= ['overlap-3-1-0','overlap-1-3-0','overlap-2-1-1','overlap-4-0-0','random']
 #alg_list = ['random']
-alg_list = ['diversity-5-1',u'random']
+alg_list = ['diversity-2-0']
 
 metric_list = [u'contact_diameter',u'awareness_diameter' , u'avg_awareness_path', u'avg_contact_path',u'num_edges',u'coverage',  u'max_coverage',u'max_second_coverage',u'clustering',u'local_bridges',u'committee']
 
 trials = 5
-COMMITTEE_SZ = 6
+COMMITTEE_SZ = 2
 COVERAGE_MIN = 1.0
-CLOSURE_PARAM = 0.08
-max_tries = 25
+CLOSURE_PARAM = 0.20
+max_tries = 30
 
 #for t-step lookahead
 sample_count = 10
@@ -1096,7 +1120,7 @@ if (fileLoad == True):
     quit()    
 
 for z,graph_desc in enumerate(G_list):
-    if (z not in [3]):
+    if (z not in [0]):
         continue 
     G,name = graph_desc
     print (u"G=%s has" %name, len(G.nodes()), u" nodes")
@@ -1108,7 +1132,7 @@ for z,graph_desc in enumerate(G_list):
     #repeat process several times, adding all times to one list
     for alg in alg_list:
         print (u"Using %s method"%alg)
-        t,graphs,committee,covg,max_covg = get_distribution_coverage_time(G,COMMITTEE_SZ,COVERAGE_MIN,CLOSURE_PARAM,trials,max_tries,alg=alg,draw_freq=0,show_ecc=False)
+        t,graphs,committee,covg,max_covg = get_distribution_coverage_time(G,COMMITTEE_SZ,COVERAGE_MIN,CLOSURE_PARAM,trials,max_tries,alg=alg,draw_freq=5,show_ecc=False)
         data_set.append((t,graphs,covg,max_covg,committee,alg))
 
 
